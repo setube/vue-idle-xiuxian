@@ -118,12 +118,51 @@ const releasePet = () => {
 }
 
 // 批量放生函数
+const selectedRarities = ref([]) // 选中的品质数组
+
+// 品质选项
+const rarityOptions = [
+    { label: '凡品', value: 'mortal', color: '#32CD32' },
+    { label: '灵品', value: 'spiritual', color: '#1E90FF' },
+    { label: '玄品', value: 'mystic', color: '#9932CC' },
+    { label: '仙品', value: 'celestial', color: '#FFD700' },
+    { label: '神品', value: 'divine', color: '#FF0000' }
+]
+
+// 批量放生灵宠
 const batchReleasePets = () => {
-    playerStore.items = playerStore.items.filter(item => 
-        item.type !== 'pet' || item.id === playerStore.activePet?.id
+    if (!selectedRarities.value.length) {
+        message.warning('请选择要放生的灵宠品质')
+        return
+    }
+
+    // 找出所有符合选中品质的灵宠
+    const petsToRelease = playerStore.items.filter(item => 
+        item.type === 'pet' && selectedRarities.value.includes(item.rarity)
     )
+
+    if (!petsToRelease.length) {
+        message.warning('没有找到符合条件的灵宠')
+        return
+    }
+
+    // 如果灵宠正在出战，先取消出战
+    if (playerStore.activePet && selectedRarities.value.includes(playerStore.activePet.rarity)) {
+        playerStore.activePet = null
+    }
+
+    // 从背包中移除灵宠
+    petsToRelease.forEach(pet => {
+        const index = playerStore.items.findIndex(item => item.id === pet.id)
+        if (index > -1) {
+            playerStore.items.splice(index, 1)
+        }
+    })
+
+    playerStore.saveData()
+    message.success(`已放生 ${petsToRelease.length} 只灵宠`)
     showBatchReleaseConfirm.value = false
-    message.success('已放生所有未出战的灵宠')
+    selectedRarities.value = [] // 清空选择
 }
 
 // 显示灵宠详情
@@ -511,14 +550,43 @@ const useItem = (item) => {
                         <n-modal 
                         v-model:show="showBatchReleaseConfirm" 
                         preset="card" 
-                        title="批量放生确认"
+                        title="批量放生灵宠"
                         style="width: 600px"
                         >
-                            <p>确定要放生所有未出战的灵宠吗？此操作不可撤销。</p>
-                            <n-space justify="end" style="margin-top: 16px;">
-                                <n-button size="small" @click="showBatchReleaseConfirm = false">取消</n-button>
-                                <n-button size="small" type="error" @click="batchReleasePets">确认放生</n-button>
+                            <n-space vertical>
+                                <p>请选择要放生的灵宠品质（可多选）：</p>
+                                <n-checkbox-group v-model:value="selectedRarities">
+                                    <n-space>
+                                        <n-checkbox
+                                            v-for="option in rarityOptions"
+                                            :key="option.value"
+                                            :value="option.value"
+                                            :style="{ color: option.color }"
+                                        >
+                                            {{ option.label }}
+                                        </n-checkbox>
+                                    </n-space>
+                                </n-checkbox-group>
+                                <p style="color: #f56c6c;">注意：此操作不可撤销，且不会返还已消耗的道具。</p>
                             </n-space>
+                            <template #footer>
+                                <n-space justify="end">
+                                    <n-button 
+                                        size="small" 
+                                        @click="showBatchReleaseConfirm = false"
+                                    >
+                                        取消
+                                    </n-button>
+                                    <n-button 
+                                        size="small" 
+                                        type="error" 
+                                        @click="batchReleasePets"
+                                        :disabled="!selectedRarities.length"
+                                    >
+                                        确认放生
+                                    </n-button>
+                                </n-space>
+                            </template>
                         </n-modal>
                         <n-grid :cols="2" :x-gap="12" :y-gap="8">
                             <n-grid-item v-for="pet in playerStore.items.filter(item => item.type === 'pet')" :key="pet.id">
