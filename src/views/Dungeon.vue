@@ -6,6 +6,7 @@ import { getRandomOptions } from '../plugins/dungeon'
 import dungeonBuffs from '../plugins/dungeonBuffs'
 import { useMessage } from 'naive-ui'
 import LogPanel from '../components/LogPanel.vue'
+import { formatNumberToChineseUnit } from '../plugins/utils'
 
 const playerStore = usePlayerStore()
 const message = useMessage()
@@ -264,17 +265,17 @@ const generateRewards = () => {
                         <!-- 玩家属性 -->
                         <n-descriptions bordered :title="`${dungeonState.combatManager.player.name}的属性`" :span="2">
                             <n-descriptions-item label="生命值">
-                                {{ dungeonState.combatManager.player.currentHealth.toFixed(1) }} /
-                                {{ dungeonState.combatManager.player.stats.maxHealth.toFixed(1) }}
+                                {{ formatNumberToChineseUnit(dungeonState.combatManager.player.currentHealth) }} /
+                                {{ formatNumberToChineseUnit(dungeonState.combatManager.player.stats.maxHealth) }}
                             </n-descriptions-item>
                             <n-descriptions-item label="攻击力">
-                                {{ dungeonState.combatManager.player.stats.damage.toFixed(1) }}
+                                {{ formatNumberToChineseUnit(dungeonState.combatManager.player.stats.damage) }}
                             </n-descriptions-item>
                             <n-descriptions-item label="防御力">
-                                {{ dungeonState.combatManager.player.stats.defense.toFixed(1) }}
+                                {{ formatNumberToChineseUnit(dungeonState.combatManager.player.stats.defense) }}
                             </n-descriptions-item>
                             <n-descriptions-item label="速度">
-                                {{ dungeonState.combatManager.player.stats.speed.toFixed(1) }}
+                                {{ formatNumberToChineseUnit(dungeonState.combatManager.player.stats.speed) }}
                             </n-descriptions-item>
                         </n-descriptions>
                         <n-collapse style="margin-top: 16px">
@@ -351,17 +352,17 @@ const generateRewards = () => {
                         <!-- 敌人属性 -->
                         <n-descriptions bordered :title="`${dungeonState.combatManager.enemy.name}的属性`" :span="2" style="margin-top: 16px">
                             <n-descriptions-item label="生命值">
-                                {{ dungeonState.combatManager.enemy.currentHealth.toFixed(1) }} /
-                                {{ dungeonState.combatManager.enemy.stats.maxHealth.toFixed(1) }}
+                                {{ formatNumberToChineseUnit(dungeonState.combatManager.enemy.currentHealth) }} /
+                                {{ formatNumberToChineseUnit(dungeonState.combatManager.enemy.stats.maxHealth) }}
                             </n-descriptions-item>
                             <n-descriptions-item label="攻击力">
-                                {{ dungeonState.combatManager.enemy.stats.damage.toFixed(1) }}
+                                {{ formatNumberToChineseUnit(dungeonState.combatManager.enemy.stats.damage) }}
                             </n-descriptions-item>
                             <n-descriptions-item label="防御力">
-                                {{ dungeonState.combatManager.enemy.stats.defense.toFixed(1) }}
+                                {{ formatNumberToChineseUnit(dungeonState.combatManager.enemy.stats.defense) }}
                             </n-descriptions-item>
                             <n-descriptions-item label="速度">
-                                {{ dungeonState.combatManager.enemy.stats.speed.toFixed(1) }}
+                                {{ formatNumberToChineseUnit(dungeonState.combatManager.enemy.stats.speed) }}
                             </n-descriptions-item>
                         </n-descriptions>
                         <n-collapse style="margin-top: 16px">

@@ -3,6 +3,7 @@ import { usePlayerStore } from '../stores/player'
 import { ref } from 'vue'
 import { useMessage } from 'naive-ui'
 import { InformationCircleOutline } from '@vicons/ionicons5'
+import { formatNumberToChineseUnit } from '../plugins/utils'
 
 const playerStore = usePlayerStore()
 const message = useMessage()
@@ -594,7 +595,7 @@ const types = {
                         </n-radio-group>
                     </div>
                     <div class="spirit-stones">
-                        <n-statistic label="灵石" :value="playerStore.spiritStones" />
+                        <n-statistic label="灵石" :value=" formatNumberToChineseUnit(playerStore.spiritStones)" />
                     </div>
                     <div class="gacha-item-container">
                         <div class="gacha-item" :class="{

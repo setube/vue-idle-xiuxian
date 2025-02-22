@@ -1,15 +1,20 @@
 <script setup>
 import { usePlayerStore } from '../stores/player'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useMessage } from 'naive-ui'
-import { getStatName, formatStatValue } from '../plugins/stats'
+import { getStatName, formatStatValue} from '../plugins/stats'
 import { getRealmName } from '../plugins/realm'
 import { pillRecipes, pillGrades, pillTypes, calculatePillEffect } from '../plugins/pills'
 import { enhanceEquipment, reforgeEquipment } from '../plugins/equipment'
-
+import { formatNumberToChineseUnit } from '../plugins/utils'
 // 分页相关
 const currentPage = ref(1)
 const pageSize = ref(12)
+
+// 放生确认弹窗
+const showReleaseConfirm = ref(false)
+const showBatchReleaseConfirm = ref(false)
+const petToRelease = ref(null)
 
 // 过滤后的灵宠列表
 const filteredPets = computed(() => {
@@ -98,9 +103,9 @@ const selectedPet = ref(null)
 const selectedFoodPet = ref(null)
 
 // 放生确认弹窗
-const showReleaseConfirm = ref(false)
-const showBatchReleaseConfirm = ref(false)
-const petToRelease = ref(null)
+// const showReleaseConfirm = ref(false)
+// const showBatchReleaseConfirm = ref(false)
+// const petToRelease = ref(null)
 
 // 显示放生确认弹窗
 const confirmReleasePet = (pet) => {
@@ -136,18 +141,24 @@ const releasePet = () => {
 }
 
 // 选中的放生品阶
-const selectedRarityToRelease = ref('all')
+const selectedRaritiesToRelease = ref(JSON.parse(localStorage.getItem('selectedRaritiesToRelease') || '[]'))
 
 // 批量放生函数
 const batchReleasePets = () => {
     playerStore.items = playerStore.items.filter(item => 
         item.type !== 'pet' || 
         item.id === playerStore.activePet?.id || 
-        (selectedRarityToRelease.value !== 'all' && item.rarity !== selectedRarityToRelease.value)
+        !selectedRaritiesToRelease.value.includes(item.rarity)
     )
     showBatchReleaseConfirm.value = false
-    message.success(`已放生${selectedRarityToRelease.value === 'all' ? '所有' : petRarities[selectedRarityToRelease.value].name}品阶的未出战灵宠`)
+    message.success('已放生选中品阶的未出战灵宠')
+    playerStore.saveData()
 }
+
+// 监听选中品阶变化并保存到本地存储
+watch(selectedRaritiesToRelease, (newVal) => {
+    localStorage.setItem('selectedRaritiesToRelease', JSON.stringify(newVal))
+}, { deep: true })
 
 // 显示灵宠详情
 const showPetDetails = (pet) => {
@@ -614,27 +625,30 @@ const useItem = (item) => {
                         </n-tabs>
                     </n-tab-pane>
                     <n-tab-pane name="pets" tab="灵宠">
-                        <n-space style="margin-bottom: 16px">
-                            <n-select v-model:value="selectedRarityToRelease" :options="[
-                                { label: '全部品阶', value: 'all' },
-                                { label: '神品', value: 'divine' },
-                                { label: '仙品', value: 'celestial' },
-                                { label: '玄品', value: 'mystic' },
-                                { label: '灵品', value: 'spiritual' },
-                                { label: '凡品', value: 'mortal' }
-                            ]" placeholder="选择放生品阶" style="width: 150px" />
-                            <n-button 
-                            @click="showBatchReleaseConfirm = true" 
-                            :disabled="!playerStore.items.filter(item => item.type === 'pet').length"
-                            >一键放生</n-button>
-                        </n-space>
+                        <n-button 
+                        style="margin-bottom: 16px"
+                        @click="showBatchReleaseConfirm = true" 
+                        :disabled="!playerStore.items.filter(item => item.type === 'pet').length"
+                        >一键放生</n-button>
                         <n-modal 
                         v-model:show="showBatchReleaseConfirm" 
                         preset="dialog" 
                         title="批量放生确认"
                         style="width: 600px"
                         >
-                            <p>确定要放生{{ selectedRarityToRelease === 'all' ? '所有' : petRarities[selectedRarityToRelease].name }}品阶的未出战灵宠吗？此操作不可撤销。</p>
+                            <n-space vertical>
+                                <p>请选择要放生的灵宠品质（可多选）：</p>
+                                <n-checkbox-group v-model:value="selectedRaritiesToRelease">
+                                    <n-space>
+                                        <n-checkbox value="divine"><span :style="{ color: petRarities.divine.color }">神品</span></n-checkbox>
+                                        <n-checkbox value="celestial"><span :style="{ color: petRarities.celestial.color }">仙品</span></n-checkbox>
+                                        <n-checkbox value="mystic"><span :style="{ color: petRarities.mystic.color }">玄品</span></n-checkbox>
+                                        <n-checkbox value="spiritual"><span :style="{ color: petRarities.spiritual.color }">灵品</span></n-checkbox>
+                                        <n-checkbox value="mortal"><span :style="{ color: petRarities.mortal.color }">凡品</span></n-checkbox>
+                                    </n-space>
+                                </n-checkbox-group>
+                                <p>确定要放生选中品阶的未出战灵宠吗？此操作不可撤销。</p>
+                            </n-space>
                             <n-space justify="end" style="margin-top: 16px;">
                                 <n-button size="small" @click="showBatchReleaseConfirm = false">取消</n-button>
                                 <n-button size="small" type="error" @click="batchReleasePets">确认放生</n-button>
@@ -693,18 +707,18 @@ const useItem = (item) => {
             </n-descriptions>
             <n-divider>属性加成</n-divider>
             <n-descriptions bordered>
-                <n-descriptions-item label="攻击加成">+{{ (getPetBonus(selectedPet).attack * 100).toFixed(1) }}%</n-descriptions-item>
-                <n-descriptions-item label="防御加成">+{{ (getPetBonus(selectedPet).defense * 100).toFixed(1) }}%</n-descriptions-item>
-                <n-descriptions-item label="生命加成">+{{ (getPetBonus(selectedPet).health * 100).toFixed(1) }}%</n-descriptions-item>
+                <n-descriptions-item label="攻击加成">+{{ getPetBonus(selectedPet).attack * 100 }}%</n-descriptions-item>
+                <n-descriptions-item label="防御加成">+{{ getPetBonus(selectedPet).defense * 100 }}%</n-descriptions-item>
+                <n-descriptions-item label="生命加成">+{{ getPetBonus(selectedPet).health * 100 }}%</n-descriptions-item>
             </n-descriptions>
             <n-divider>战斗属性</n-divider>
             <n-collapse>
                 <n-collapse-item title="展开" name="1">
                     <n-descriptions bordered>
-                        <n-descriptions-item label="攻击力">{{ selectedPet.combatAttributes?.attack || 0 }}</n-descriptions-item>
-                        <n-descriptions-item label="生命值">{{ selectedPet.combatAttributes?.health || 0 }}</n-descriptions-item>
-                        <n-descriptions-item label="防御力">{{ selectedPet.combatAttributes?.defense || 0 }}</n-descriptions-item>
-                        <n-descriptions-item label="速度">{{ selectedPet.combatAttributes?.speed || 0 }}</n-descriptions-item>
+                        <n-descriptions-item label="攻击力">{{ formatNumberToChineseUnit(selectedPet.combatAttributes?.attack || 0 )}}</n-descriptions-item>
+                        <n-descriptions-item label="生命值">{{ formatNumberToChineseUnit(selectedPet.combatAttributes?.health || 0 )}}</n-descriptions-item>
+                        <n-descriptions-item label="防御力">{{ formatNumberToChineseUnit(selectedPet.combatAttributes?.defense || 0 )}}</n-descriptions-item>
+                        <n-descriptions-item label="速度">{{ formatNumberToChineseUnit(selectedPet.combatAttributes?.speed || 0 )}}</n-descriptions-item>
                         <n-descriptions-item label="暴击率">{{ ((selectedPet.combatAttributes?.critRate || 0) * 100).toFixed(1) }}%</n-descriptions-item>
                         <n-descriptions-item label="连击率">{{ ((selectedPet.combatAttributes?.comboRate || 0) * 100).toFixed(1) }}%</n-descriptions-item>
                         <n-descriptions-item label="反击率">{{ ((selectedPet.combatAttributes?.counterRate || 0) * 100).toFixed(1) }}%</n-descriptions-item>

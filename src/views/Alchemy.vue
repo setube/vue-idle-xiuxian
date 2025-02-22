@@ -4,6 +4,7 @@ import { usePlayerStore } from '../stores/player'
 import { pillRecipes, pillGrades, pillTypes, calculatePillEffect } from '../plugins/pills'
 import { herbs } from '../plugins/herbs'
 import LogPanel from '../components/LogPanel.vue'
+import { formatNumberToChineseUnit } from '../plugins/utils'
 
 const playerStore = usePlayerStore()
 const logRef = ref(null)
@@ -33,7 +34,7 @@ const checkMaterials = (recipe) => {
 // 获取材料状态文本
 const getMaterialStatus = (material) => {
     const count = playerStore.herbs.filter(h => h.id === material.herb).length
-    return `${count}/${material.count}`
+    return `${formatNumberToChineseUnit(count)}/${formatNumberToChineseUnit(material.count)}`
 }
 
 // 获取灵草名称
@@ -45,7 +46,7 @@ const getHerbName = (herbId) => {
 // 计算当前效果
 const currentEffect = computed(() => {
     if (!selectedRecipe.value) return null
-    return calculatePillEffect(selectedRecipe.value, playerStore.level)
+    return formatNumberToChineseUnit(calculatePillEffect(selectedRecipe.value, playerStore.level))
 })
 
 // 炼制丹药

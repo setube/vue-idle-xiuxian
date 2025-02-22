@@ -1,9 +1,10 @@
 <script setup>
 import { usePlayerStore } from '../stores/player'
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { NIcon } from 'naive-ui'
 import { BookOutline } from '@vicons/ionicons5'
 import LogPanel from '../components/LogPanel.vue'
+import { formatNumberToChineseUnit } from '../plugins/utils'
 
 const playerStore = usePlayerStore()
 const logRef = ref(null)
@@ -205,7 +206,7 @@ onUnmounted(() => {
                     @click="cultivate"
                     :disabled="playerStore.spirit < cultivationCost"
                 >
-                    打坐修炼 (消耗 {{ cultivationCost }} 灵力)
+                    打坐修炼 (消耗 {{ formatNumberToChineseUnit(cultivationCost) }} 灵力)
                 </n-button>
 
                 <n-button
@@ -234,13 +235,13 @@ onUnmounted(() => {
                 <n-collapse-item title="修炼详情" name="details">
                     <n-descriptions bordered>
                         <n-descriptions-item label="灵力获取速率">
-                            {{ baseGainRate * playerStore.spiritRate }} / 秒
+                            {{ formatNumberToChineseUnit(baseGainRate * playerStore.spiritRate) }} / 秒
                         </n-descriptions-item>
                         <n-descriptions-item label="修炼效率">
-                            {{ cultivationGain }} 修为 / 次
+                            {{ formatNumberToChineseUnit(cultivationGain) }} 修为 / 次
                         </n-descriptions-item>
                         <n-descriptions-item label="突破所需修为">
-                            {{ playerStore.maxCultivation }}
+                            {{ formatNumberToChineseUnit(playerStore.maxCultivation) }}
                         </n-descriptions-item>
                     </n-descriptions>
                 </n-collapse-item>

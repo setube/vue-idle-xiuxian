@@ -6,6 +6,7 @@ import { NIcon, darkTheme } from 'naive-ui'
 import { BookOutlined, ExperimentOutlined, CompassOutlined, TrophyOutlined, SettingOutlined, MedicineBoxOutlined, GiftOutlined, HomeOutlined, SmileOutlined } from '@ant-design/icons-vue'
 import { Moon, Sunny, Flash } from '@vicons/ionicons5'
 import { getRealmName } from './plugins/realm'
+import { formatNumberToChineseUnit } from './plugins/utils'
 
 const router = useRouter()
 const route = useRoute()
@@ -183,16 +184,16 @@ const handleMenuClick = (key) => {
                       {{ getRealmName(playerStore.level) }}
                     </n-descriptions-item>
                     <n-descriptions-item label="修为">
-                      {{ playerStore.cultivation }} / {{ playerStore.maxCultivation }}
+                      {{ formatNumberToChineseUnit(playerStore.cultivation) }} / {{ formatNumberToChineseUnit(playerStore.maxCultivation) }}
                     </n-descriptions-item>
                     <n-descriptions-item label="灵力">
-                      {{ playerStore.spirit.toFixed(2) }}
+                      {{ formatNumberToChineseUnit(playerStore.spirit) }}
                     </n-descriptions-item>
                     <n-descriptions-item label="灵石">
-                      {{ playerStore.spiritStones }}
+                      {{ formatNumberToChineseUnit(playerStore.spiritStones) }}
                     </n-descriptions-item>
                     <n-descriptions-item label="强化石">
-                      {{ playerStore.reinforceStones }}
+                      {{ formatNumberToChineseUnit(playerStore.reinforceStones) }}
                     </n-descriptions-item>
                   </n-descriptions>
                   <n-progress
