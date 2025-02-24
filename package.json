@@ -1,7 +1,7 @@
 {
   "name": "vue-idle-xiuxian",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.3",
   "type": "module",
   "scripts": {
     "dev": "vite --open --port 2025",

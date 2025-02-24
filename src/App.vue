@@ -16,38 +16,44 @@ const playerStore = usePlayerStore()
 const baseGainRate = 1  // 基础灵力获取率
 const autoGainInterval = 1000  // 自动获取灵力的间隔（毫秒）
 const spiritTimer = ref(null)
-const version = localStorage.getItem('version')
+const lastUpdate = ref(Date.now())
+const isVisible = ref(!document.hidden)
 
-const isversion = ref(false)
-isversion.value = playerStore.version != version
-
-// 清空数据
-const clickClearData = () => {
-    // 清空localStorage中的数据
-    if (playerStore.level >= 1 && (!version || playerStore.version != version)) {
-        localStorage.removeItem('playerData')
-        localStorage.removeItem('version')
-        localStorage.setItem('version', playerStore.version)
-        isversion.value = false
-        location.reload()
+// 监听页面可见性变化
+onMounted(() => {
+  document.addEventListener('visibilitychange', () => {
+    isVisible.value = !document.hidden
+    if (!document.hidden) {
+      lastUpdate.value = Date.now()
     }
-}
+  })
+})
 
 // 自动获取灵力
 const startAutoGain = () => {
-    if (spiritTimer.value) return
-    spiritTimer.value = setInterval(() => {
-        playerStore.totalCultivationTime += 1;
-        playerStore.gainSpirit(baseGainRate)
-    }, autoGainInterval)
+  if (spiritTimer.value) return
+
+  const updateSpirit = () => {
+    const now = Date.now()
+    const deltaTime = now - lastUpdate.value
+    const ticks = Math.floor(deltaTime / autoGainInterval)
+    if (ticks > 0) {
+      playerStore.totalCultivationTime += ticks
+      playerStore.gainSpirit(baseGainRate * ticks)
+      lastUpdate.value = now - (deltaTime % autoGainInterval)
+    }
+    spiritTimer.value = requestAnimationFrame(updateSpirit)
+  }
+  lastUpdate.value = Date.now()
+  spiritTimer.value = requestAnimationFrame(updateSpirit)
 }
 
 // 停止自动获取
 const stopAutoGain = () => {
-    if (spiritTimer.value) {
-        clearInterval(spiritTimer.value)
-        spiritTimer.value = null
-    }
+  if (spiritTimer.value) {
+    cancelAnimationFrame(spiritTimer.value)
+    spiritTimer.value = null
+  }
 }
 
 onMounted(() => {
@@ -145,31 +151,23 @@ const handleMenuClick = (key) => {
             <div class="header-content">
               <n-page-header>
                 <template #title>
-                    我的放置仙途
+                  我的放置仙途
                 </template>
                 <template #extra>
-                    <n-button
-                        quaternary
-                        circle
-                        @click="playerStore.toggleDarkMode"
-                    >
-                        <template #icon>
-                        <n-icon>
-                            <Sunny v-if="playerStore.isDarkMode" />
-                            <Moon v-else />
-                        </n-icon>
-                        </template>
-                    </n-button>
+                  <n-button quaternary circle @click="playerStore.toggleDarkMode">
+                    <template #icon>
+                      <n-icon>
+                        <Sunny v-if="playerStore.isDarkMode" />
+                        <Moon v-else />
+                      </n-icon>
+                    </template>
+                  </n-button>
                 </template>
               </n-page-header>
               <n-scrollbar x-scrollable trigger="none">
-              <n-menu
-                  mode="horizontal"
-                  :options="menuOptions"
-                  :value="getCurrentMenuKey()"
-                  @update:value="handleMenuClick"
-              />
-            </n-scrollbar>
+                <n-menu mode="horizontal" :options="menuOptions" :value="getCurrentMenuKey()"
+                  @update:value="handleMenuClick" />
+              </n-scrollbar>
             </div>
           </n-layout-header>
           <n-layout-content>
@@ -196,16 +194,96 @@ const handleMenuClick = (key) => {
                       {{ formatNumberToChineseUnit(playerStore.reinforceStones) }}
                     </n-descriptions-item>
                   </n-descriptions>
-                  <n-progress
-                    type="line"
+
+                  <n-collapse>
+                    <n-collapse-item title="详细信息" name="1">
+                      <n-divider>基础属性</n-divider>
+                      <n-descriptions bordered :column="2">
+                        <n-descriptions-item label="生命值">
+                          {{ formatNumberToChineseUnit(playerStore.baseAttributes.health|| 0) }}
+                        </n-descriptions-item>
+                        <n-descriptions-item label="攻击力">
+                          {{ formatNumberToChineseUnit(playerStore.baseAttributes.attack|| 0) }}
+                        </n-descriptions-item>
+                        <n-descriptions-item label="防御力">
+                          {{ formatNumberToChineseUnit(playerStore.baseAttributes.defense|| 0) }}
+                        </n-descriptions-item>
+                        <n-descriptions-item label="速度">
+                          {{ formatNumberToChineseUnit(playerStore.baseAttributes.speed || 0) }}
+                        </n-descriptions-item>
+                      </n-descriptions>
+                      <n-divider>战斗属性</n-divider>
+                      <n-descriptions bordered :column="3">
+                        <n-descriptions-item label="暴击率">
+                          {{ (playerStore.combatAttributes.critRate * 100).toFixed(1) }}%
+                        </n-descriptions-item>
+                        <n-descriptions-item label="连击率">
+                          {{ (playerStore.combatAttributes.comboRate * 100).toFixed(1) }}%
+                        </n-descriptions-item>
+                        <n-descriptions-item label="反击率">
+                          {{ (playerStore.combatAttributes.counterRate * 100).toFixed(1) }}%
+                        </n-descriptions-item>
+                        <n-descriptions-item label="眩晕率">
+                          {{ (playerStore.combatAttributes.stunRate * 100).toFixed(1) }}%
+                        </n-descriptions-item>
+                        <n-descriptions-item label="闪避率">
+                          {{ (playerStore.combatAttributes.dodgeRate * 100).toFixed(1) }}%
+                        </n-descriptions-item>
+                        <n-descriptions-item label="吸血率">
+                          {{ (playerStore.combatAttributes.vampireRate * 100).toFixed(1) }}%
+                        </n-descriptions-item>
+                      </n-descriptions>
+                      <n-divider>战斗抗性</n-divider>
+                      <n-descriptions bordered :column="3">
+                        <n-descriptions-item label="抗暴击">
+                          {{ (playerStore.combatResistance.critResist * 100 || 0).toFixed(1) }}%
+                        </n-descriptions-item>
+                        <n-descriptions-item label="抗连击">
+                          {{ (playerStore.combatResistance.comboResist * 100 || 0).toFixed(1) }}%
+                        </n-descriptions-item>
+                        <n-descriptions-item label="抗反击">
+                          {{ (playerStore.combatResistance.counterResist * 100 || 0).toFixed(1) }}%
+                        </n-descriptions-item>
+                        <n-descriptions-item label="抗眩晕">
+                          {{ (playerStore.combatResistance.stunResist * 100 || 0).toFixed(1) }}%
+                        </n-descriptions-item>
+                        <n-descriptions-item label="抗闪避">
+                          {{ (playerStore.combatResistance.dodgeResist * 100 || 0).toFixed(1) }}%
+                        </n-descriptions-item>
+                        <n-descriptions-item label="抗吸血">
+                          {{ (playerStore.combatResistance.vampireResist * 100 || 0).toFixed(1) }}%
+                        </n-descriptions-item>
+                      </n-descriptions>
+                      <n-divider>特殊属性</n-divider>
+                      <n-descriptions bordered :column="4">
+                        <n-descriptions-item label="强化治疗">
+                          {{ (playerStore.specialAttributes.healBoost * 100 || 0).toFixed(1) }}%
+                        </n-descriptions-item>
+                        <n-descriptions-item label="强化爆伤">
+                          {{ (playerStore.specialAttributes.critDamageBoost * 100 || 0).toFixed(1) }}%
+                        </n-descriptions-item>
+                        <n-descriptions-item label="弱化爆伤">
+                          {{ (playerStore.specialAttributes.critDamageReduce * 100 || 0).toFixed(1) }}%
+                        </n-descriptions-item>
+                        <n-descriptions-item label="最终增伤">
+                          {{ (playerStore.specialAttributes.finalDamageBoost * 100 || 0).toFixed(1) }}%
+                        </n-descriptions-item>
+                        <n-descriptions-item label="最终减伤">
+                          {{ (playerStore.specialAttributes.finalDamageReduce * 100 || 0).toFixed(1) }}%
+                        </n-descriptions-item>
+                        <n-descriptions-item label="战斗属性提升">
+                          {{ (playerStore.specialAttributes.combatBoost * 100 || 0).toFixed(1) }}%
+                        </n-descriptions-item>
+                        <n-descriptions-item label="战斗抗性提升">
+                          {{ (playerStore.specialAttributes.resistanceBoost * 100 || 0).toFixed(1) }}%
+                        </n-descriptions-item>
+                      </n-descriptions>
+                    </n-collapse-item>
+                  </n-collapse>
+                  <n-progress type="line"
                     :percentage="Number(((playerStore.cultivation / playerStore.maxCultivation) * 100).toFixed(2))"
-                    indicator-text-color="rgba(255, 255, 255, 0.82)"
-                    rail-color="rgba(32, 128, 240, 0.2)"
-                    color="#2080f0"
-                    :show-indicator="true"
-                    indicator-placement="inside"
-                    processing
-                  />
+                    indicator-text-color="rgba(255, 255, 255, 0.82)" rail-color="rgba(32, 128, 240, 0.2)"
+                    color="#2080f0" :show-indicator="true" indicator-placement="inside" processing />
                 </n-space>
               </n-card>
               <router-view />
@@ -214,14 +292,6 @@ const handleMenuClick = (key) => {
         </n-layout>
       </n-dialog-provider>
     </n-message-provider>
-    <n-modal v-model:show="isversion" preset="dialog">
-        <n-card title="版本更新提示" :bordered="false">
-            检测到游戏版本已更新，为了确保游戏正常运行，需要清理旧版本数据。
-            <template #footer>
-                <n-button type="primary" @click="clickClearData">确定</n-button>
-            </template>
-        </n-card>
-    </n-modal>
   </n-config-provider>
 </template>
 
@@ -232,23 +302,23 @@ const handleMenuClick = (key) => {
   box-sizing: border-box;
 }
 :root {
-    --n-color: rgb(16, 16, 20);
-    --n-text-color: rgba(255, 255, 255, 0.82);
+  --n-color: rgb(16, 16, 20);
+  --n-text-color: rgba(255, 255, 255, 0.82);
 }
 
 html.dark {
-    background-color: var(--n-color);
+  background-color: var(--n-color);
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
-    Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+    Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
 }
 
-.n-config-provider, 
+.n-config-provider,
 .n-layout {
-    height: 100%;
-    min-height: 100vh;
+  height: 100%;
+  min-height: 100vh;
 }
 
 .header-content {
@@ -275,8 +345,8 @@ body {
 }
 
 .n-page-header__title {
-    padding: 16px 0;
-    margin: 0 16px;
+  padding: 16px 0;
+  margin: 0 16px;
 }
 
 ::-webkit-scrollbar {
