@@ -29,6 +29,15 @@ onMounted(() => {
   })
 })
 
+// 添加一个方法来判断是否显示详细信息
+const shouldShowDetails = () => {
+  const path = route.path.slice(1) // 移除开头的斜杠
+  // 在这个数组中添加不需要显示详细信息的路由
+  const hideDetailsRoutes = ['dungeon', 'gacha','inventory','alchemy','exploration','achievements']
+  return !hideDetailsRoutes.includes(path)
+}
+
+
 // 自动获取灵力
 const startAutoGain = () => {
   if (spiritTimer.value) return
@@ -144,7 +153,7 @@ const handleMenuClick = (key) => {
 
 <template>
   <n-config-provider :theme="playerStore.isDarkMode ? darkTheme : null">
-    <n-message-provider>
+    <n-message-provider placement="top-right" :max="5">
       <n-dialog-provider>
         <n-layout>
           <n-layout-header bordered>
@@ -172,7 +181,7 @@ const handleMenuClick = (key) => {
           </n-layout-header>
           <n-layout-content>
             <div class="content-wrapper">
-              <n-card>
+              <n-card v-if="shouldShowDetails()">
                 <n-space vertical>
                   <n-descriptions bordered>
                     <n-descriptions-item label="道号">

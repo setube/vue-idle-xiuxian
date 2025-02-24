@@ -281,33 +281,33 @@ class CombatManager {
 // 生成敌人
 function generateEnemy (level, type = CombatType.NORMAL, realm = '练气一层') {
   const baseStats = {
-    // 基础属性
-    health: 100 + (level * 200),
-    damage: 8 + level * 2,
-    defense: 3 + level * 2,
-    speed: 5 + level * 2,
-    // 战斗属性（百分比）
-    critRate: 0.05 + (level * 0.002),
-    comboRate: 0.03 + (level * 0.002),
-    counterRate: 0.03 + (level * 0.002),
-    stunRate: 0.02 + (level * 0.001),
-    dodgeRate: 0.05 + (level * 0.002),
-    vampireRate: 0.02 + (level * 0.001),
-    // 战斗抗性（百分比）
-    critResist: 0.02 + (level * 0.001),
-    comboResist: 0.02 + (level * 0.001),
-    counterResist: 0.02 + (level * 0.001),
-    stunResist: 0.02 + (level * 0.001),
-    dodgeResist: 0.02 + (level * 0.001),
-    vampireResist: 0.02 + (level * 0.001),
-    // 特殊属性（百分比）
-    healBoost: 0.05 + (level * 0.002),
-    critDamageBoost: 0.2 + (level * 0.01),
-    critDamageReduce: 0.1 + (level * 0.005),
-    finalDamageBoost: 0.05 + (level * 0.002),
-    finalDamageReduce: 0.05 + (level * 0.002),
-    combatBoost: 0.03 + (level * 0.002),
-    resistanceBoost: 0.03 + (level * 0.002)
+    // 基础属性 - 调整基础成长
+    health: 10 + (level * 150),
+    damage: 5 + level * 2.5,
+    defense: 2 + level * 1.5,
+    speed: 4 + level * 1.5,
+    // 战斗属性（百分比）- 降低基础值，提高成长
+    critRate: 0.03 + (level * 0.001),      // 最高10%暴击
+    comboRate: 0.02 + (level * 0.001),     // 最高8%连击
+    counterRate: 0.02 + (level * 0.001),   // 最高8%反击
+    stunRate: 0.01 + (level * 0.0005),     // 最高3%眩晕
+    dodgeRate: 0.03 + (level * 0.001),     // 最高10%闪避
+    vampireRate: 0.01 + (level * 0.0005),  // 最高3%吸血
+    // 战斗抗性（百分比）- 与攻击属性相对应
+    critResist: 0.02 + (level * 0.001),    // 最高8%抗暴
+    comboResist: 0.02 + (level * 0.001),   // 最高8%抗连击
+    counterResist: 0.02 + (level * 0.001), // 最高8%抗反击
+    stunResist: 0.02 + (level * 0.001),    // 最高8%抗眩晕
+    dodgeResist: 0.02 + (level * 0.001),   // 最高8%抗闪避
+    vampireResist: 0.02 + (level * 0.001), // 最高8%抗吸血
+    // 特殊属性（百分比）- 调整收益
+    healBoost: 0.03 + (level * 0.001),     // 治疗提升
+    critDamageBoost: 0.3 + (level * 0.01), // 爆伤提升
+    critDamageReduce: 0.05 + (level * 0.002), // 爆伤减免
+    finalDamageBoost: 0.03 + (level * 0.001), // 最终伤害提升
+    finalDamageReduce: 0.03 + (level * 0.001), // 最终伤害减免
+    combatBoost: 0.02 + (level * 0.001),    // 战斗属性提升
+    resistanceBoost: 0.02 + (level * 0.001)  // 抗性提升
   }
   // 根据类型调整属性
   switch (type) {
@@ -315,9 +315,9 @@ function generateEnemy (level, type = CombatType.NORMAL, realm = '练气一层')
       Object.keys(baseStats).forEach(key => {
         if (typeof baseStats[key] === 'number') {
           if (key.includes('Rate') || key.includes('Resist') || key.includes('Boost') || key.includes('Reduce')) {
-            baseStats[key] = Math.min(0.8, baseStats[key] * 1.3) // 百分比属性最高限制在80%
+            baseStats[key] = Math.min(0.5, baseStats[key] * 1.3) // 降低上限到50%
           } else {
-            baseStats[key] *= 1.5
+            baseStats[key] *= 1.5 // 保持1.5倍基础属性
           }
         }
       })
@@ -326,9 +326,9 @@ function generateEnemy (level, type = CombatType.NORMAL, realm = '练气一层')
       Object.keys(baseStats).forEach(key => {
         if (typeof baseStats[key] === 'number') {
           if (key.includes('Rate') || key.includes('Resist') || key.includes('Boost') || key.includes('Reduce')) {
-            baseStats[key] = Math.min(0.9, baseStats[key] * 1.5) // 百分比属性最高限制在90%
+            baseStats[key] = Math.min(0.6, baseStats[key] * 1.5) // 降低上限到60%
           } else {
-            baseStats[key] *= 2
+            baseStats[key] *= 2 // 保持2倍基础属性
           }
         }
       })

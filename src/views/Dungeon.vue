@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { usePlayerStore } from '../stores/player'
 import { CombatManager, CombatEntity, generateEnemy, CombatType } from '../plugins/combat'
 import { getRandomOptions } from '../plugins/dungeon'
@@ -29,6 +29,9 @@ const dungeonState = ref({
 
 // 当前战斗日志
 const combatLog = ref([])
+
+// 添加已选择增益的状态
+const selectedBuffs = ref([])
 
 // 根据选项类型获取颜色
 const getOptionColor = (type) => {
@@ -88,6 +91,7 @@ const createPlayerEntity = () => {
 
 // 开始新的副本
 const startDungeon = () => {
+  selectedBuffs.value = []
   dungeonState.value = {
     floor: 0,
     inCombat: false,
@@ -95,7 +99,18 @@ const startDungeon = () => {
     currentOptions: [],
     combatManager: null
   }
-  playerStore.dungeonTotalRuns++  // 增加总探索次数
+  // 重置存储的状态
+  playerStore.dungeonState = {
+    floor: 0,
+    showingOptions: false,
+    currentOptions: [],
+    inCombat: false,
+    enemy: null,
+    selectedBuffs: [], // 重置已选择的增益
+    activeBuffs: {}    // 重置生效的增益
+  }
+  playerStore.dungeonTotalRuns++
+  playerStore.isDungeonRunning = true
   nextFloor()
 }
 
@@ -113,16 +128,44 @@ const nextFloor = () => {
 
 // 显示随机选项
 const showOptions = () => {
+  // 只有在没有现有选项时才生成新的选项
+  if (!playerStore.dungeonState.currentOptions.length) {
+    playerStore.dungeonState.currentOptions = getRandomOptions(dungeonState.value.floor)
+  }
   dungeonState.value.showingOptions = true
-  dungeonState.value.currentOptions = getRandomOptions(dungeonState.value.floor)
+  dungeonState.value.currentOptions = playerStore.dungeonState.currentOptions
+  // 保存状态
+  playerStore.dungeonState.showingOptions = true
+  playerStore.dungeonState.floor = dungeonState.value.floor
 }
 
 // 选择选项
 const selectOption = (option) => {
+  // 检查是否已存在相同的增益
+  const existingBuff = selectedBuffs.value.find(buff => buff.id === option.id)
+  if (existingBuff) {
+    existingBuff.count++
+  } else {
+    selectedBuffs.value.push({
+      ...option,
+      count: 1
+    })
+  }
+  
+  // 保存选择的增益到 store
+  playerStore.dungeonState.selectedBuffs = selectedBuffs.value
+
+  // 应用增益效果
   dungeonBuffs.apply(playerStore, option)
+  // 保存应用的增益效果
+  playerStore.dungeonState.activeBuffs = dungeonBuffs.getActiveBuffs()
+  
   message.success(`选择了：${option.name}`)
+  // 清除选项状态
   dungeonState.value.showingOptions = false
   dungeonState.value.currentOptions = []
+  playerStore.dungeonState.currentOptions = []
+  playerStore.dungeonState.showingOptions = false
   startCombat()
 }
 
@@ -135,6 +178,10 @@ const handleDefeat = () => {
   playerStore.dungeonDeathCount++
   // 清除所有临时增益效果
   dungeonBuffs.clear(playerStore)
+  // 清除保存的增益状态
+  playerStore.dungeonState.selectedBuffs = []
+  playerStore.dungeonState.activeBuffs = {}
+  selectedBuffs.value = []
   // 记录失败层数
   playerStore.dungeonLastFailedFloor = dungeonState.value.floor
   // 重置副本进度
@@ -143,6 +190,7 @@ const handleDefeat = () => {
   const cultivationLoss = Math.floor(playerStore.cultivation * 0.1) // 损失10%修为
   playerStore.cultivation = Math.max(0, playerStore.cultivation - cultivationLoss)
   message.error(`战斗失败！损失了${cultivationLoss}点修为。`)
+  playerStore.isDungeonRunning = false // 设置探索状态为结束
 }
 
 // 开始战斗
@@ -151,10 +199,15 @@ const startCombat = () => {
   const isBossFloor = floor % 10 === 0
   const isEliteFloor = floor % 5 === 0
   const enemyType = isBossFloor ? CombatType.BOSS : isEliteFloor ? CombatType.ELITE : CombatType.NORMAL
+  
+  // 创建敌人
+  const enemy = playerStore.dungeonState.enemy || generateEnemy(floor, enemyType)
+  if (!playerStore.dungeonState.enemy) {
+    playerStore.dungeonState.enemy = enemy
+  }
+  
   // 创建玩家战斗实体，并应用所有增益效果
   const playerEntity = createPlayerEntity()
-  // 创建敌人
-  const enemy = generateEnemy(floor, enemyType)
   // 创建战斗管理器
   dungeonState.value.combatManager = new CombatManager(
     playerEntity,
@@ -168,6 +221,10 @@ const startCombat = () => {
   dungeonState.value.inCombat = true
   dungeonState.value.combatManager.start() // 初始化战斗状态
   autoCombat() // 开始自动战斗
+  
+  // 保存战斗状态
+  playerStore.dungeonState.inCombat = true
+  playerStore.dungeonState.floor = floor
 }
 
 // 自动战斗
@@ -211,6 +268,8 @@ const autoCombat = async () => {
 const handleVictory = () => {
   dungeonState.value.inCombat = false
   message.success(`击败了第 ${dungeonState.value.floor} 层的敌人！`)
+  // 保存当前进度
+  playerStore.dungeonProgress = dungeonState.value.floor
   // 更新统计数据
   playerStore.dungeonTotalKills++
   if (dungeonState.value.floor % 10 === 0) {
@@ -234,6 +293,9 @@ const handleVictory = () => {
     }
     playerStore.dungeonTotalRewards++
   })
+  // 清除当前战斗的敌人信息
+  playerStore.dungeonState.enemy = null
+  playerStore.dungeonState.inCombat = false
   // 进入下一层
   nextFloor()
 }
@@ -252,9 +314,47 @@ const generateRewards = () => {
 }
 
 const infoCliclk = (type) => {
+  console.log('clicked type:', type) // 添加调试日志
   infoShow.value = true
   infoType.value = type
 }
+
+// 添加恢复探索状态的函数
+const restoreDungeonState = () => {
+  if (playerStore.isDungeonRunning) {
+    // 恢复已选择的增益状态
+    selectedBuffs.value = playerStore.dungeonState.selectedBuffs || []
+    
+    // 恢复副本状态
+    dungeonState.value = {
+      floor: playerStore.dungeonState.floor,
+      inCombat: playerStore.dungeonState.inCombat,
+      showingOptions: playerStore.dungeonState.showingOptions,
+      currentOptions: playerStore.dungeonState.currentOptions,
+      combatManager: null
+    }
+
+    // 恢复增益效果
+    if (playerStore.dungeonState.activeBuffs) {
+      dungeonBuffs.restoreBuffs(playerStore, playerStore.dungeonState.activeBuffs)
+    }
+    
+    // 如果正在显示选项，恢复选项界面
+    if (playerStore.dungeonState.showingOptions) {
+      dungeonState.value.showingOptions = true
+      dungeonState.value.currentOptions = playerStore.dungeonState.currentOptions
+    }
+    // 如果正在战斗，恢复战斗
+    else if (playerStore.dungeonState.inCombat) {
+      startCombat()
+    }
+  }
+}
+
+// 在组件挂载时检查并恢复状态
+onMounted(() => {
+  restoreDungeonState()
+})
 
 </script>
 
@@ -262,11 +362,50 @@ const infoCliclk = (type) => {
   <div class="dungeon-container">
     <n-card title="秘境探索">
       <template #header-extra>
-        <n-button type="primary" @click="startDungeon" :disabled="dungeonState.inCombat || dungeonState.showingOptions">
-          开始探索
+        <n-button 
+          type="primary" 
+          @click="startDungeon" 
+          :disabled="dungeonState.inCombat || 
+                    dungeonState.showingOptions || 
+                    playerStore.isDungeonRunning"
+        >
+          {{ playerStore.isDungeonRunning ? '探索进行中...' : '开始探索' }}
         </n-button>
       </template>
       <n-space vertical>
+        <!-- 添加已选择增益的状态栏 -->
+        <n-card v-if="selectedBuffs.length > 0" title="已选择增益" size="small">
+          <n-space>
+            <n-tooltip
+              v-for="buff in selectedBuffs"
+              :key="buff.id"
+              trigger="hover"
+              placement="top"
+            >
+              <template #trigger>
+                <n-tag
+                  :type="buff.type === 'epic' ? 'error' : buff.type === 'rare' ? 'info' : 'success'"
+                  :bordered="false"
+                  round
+                  size="medium"
+                  style="cursor: pointer"
+                >
+                  {{ buff.name }}
+                  <n-badge v-if="buff.count > 1" :value="buff.count" :max="99" />
+                </n-tag>
+              </template>
+              <div style="max-width: 300px">
+                <div style="font-weight: bold; margin-bottom: 8px">
+                  {{ buff.name }}
+                  <span :style="{ color: getOptionColor(buff.type).color }">
+                    [{{ getOptionColor(buff.type).name }}]
+                  </span>
+                </div>
+                <div>{{ buff.description }}</div>
+              </div>
+            </n-tooltip>
+          </n-space>
+        </n-card>
         <!-- 层数显示 -->
         <n-statistic label="当前层数" :value="dungeonState.floor" />
         <!-- 选项界面 -->
@@ -318,24 +457,24 @@ const infoCliclk = (type) => {
               </div>
             </div>
             <n-modal v-model:show="infoShow" preset="dialog"
-              :title="`${infoType == 'player' ? dungeonState.combatManager.player.name : dungeonState.combatManager.enemy.name }的属性`">
+              :title="`${infoType === 'player' ? dungeonState.combatManager.player.name : dungeonState.combatManager.enemy.name }的属性`">
               <n-card :bordered="false">
                 <!-- 玩家属性 -->
-                <template v-if="infoType = 'player'">
+                <template v-if="infoType === 'player'">
                   <n-divider>基础属性</n-divider>
                   <n-descriptions bordered :column="2">
                     <n-descriptions-item label="生命值">
-                      {{ dungeonState.combatManager.player.currentHealth.toFixed(1) }} /
-                      {{ dungeonState.combatManager.player.stats.maxHealth.toFixed(1) }}
+                      {{ formatNumberToChineseUnit(dungeonState.combatManager.player.currentHealth) }} /
+                      {{ formatNumberToChineseUnit(dungeonState.combatManager.player.stats.maxHealth) }}
                     </n-descriptions-item>
                     <n-descriptions-item label="攻击力">
-                      {{ dungeonState.combatManager.player.stats.damage.toFixed(1) }}
+                      {{ formatNumberToChineseUnit(dungeonState.combatManager.player.stats.damage) }}
                     </n-descriptions-item>
                     <n-descriptions-item label="防御力">
-                      {{ dungeonState.combatManager.player.stats.defense.toFixed(1) }}
+                      {{ formatNumberToChineseUnit(dungeonState.combatManager.player.stats.defense) }}
                     </n-descriptions-item>
                     <n-descriptions-item label="速度">
-                      {{ dungeonState.combatManager.player.stats.speed.toFixed(1) }}
+                      {{ formatNumberToChineseUnit(dungeonState.combatManager.player.stats.speed) }}
                     </n-descriptions-item>
                   </n-descriptions>
                   <n-divider>战斗属性</n-divider>
@@ -410,17 +549,17 @@ const infoCliclk = (type) => {
                   <n-divider>基础属性</n-divider>
                   <n-descriptions bordered :column="2">
                     <n-descriptions-item label="生命值">
-                      {{ dungeonState.combatManager.enemy.currentHealth.toFixed(1) }} /
-                      {{ dungeonState.combatManager.enemy.stats.maxHealth.toFixed(1) }}
+                      {{ formatNumberToChineseUnit(dungeonState.combatManager.enemy.currentHealth) }} /
+                      {{ formatNumberToChineseUnit(dungeonState.combatManager.enemy.stats.maxHealth) }}
                     </n-descriptions-item>
                     <n-descriptions-item label="攻击力">
-                      {{ dungeonState.combatManager.enemy.stats.damage.toFixed(1) }}
+                      {{ formatNumberToChineseUnit(dungeonState.combatManager.enemy.stats.damage) }}
                     </n-descriptions-item>
                     <n-descriptions-item label="防御力">
-                      {{ dungeonState.combatManager.enemy.stats.defense.toFixed(1) }}
+                      {{ formatNumberToChineseUnit(dungeonState.combatManager.enemy.stats.defense) }}
                     </n-descriptions-item>
                     <n-descriptions-item label="速度">
-                      {{ dungeonState.combatManager.enemy.stats.speed.toFixed(1) }}
+                      {{ formatNumberToChineseUnit(dungeonState.combatManager.enemy.stats.speed) }}
                     </n-descriptions-item>
                   </n-descriptions>
                   <n-divider>战斗属性</n-divider>
@@ -725,5 +864,16 @@ const infoCliclk = (type) => {
   100% {
     transform: translateX(0) rotate(0deg);
   }
+}
+
+/* 添加新的样式 */
+.n-tag {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.n-badge {
+  margin-left: 4px;
 }
 </style>

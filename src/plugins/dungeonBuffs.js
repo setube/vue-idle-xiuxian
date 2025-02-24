@@ -54,6 +54,23 @@ const dungeonBuffs = {
   // 获取当前活跃的增益效果
   getActiveBuffs () {
     return this.activeBuffs
+  },
+
+  // 获取当前生效的增益效果
+  getActiveBuffs() {
+    // 返回当前生效的所有增益效果的快照
+    return [...this.activeBuffs]
+  },
+
+  // 恢复增益效果
+  restoreBuffs(player, buffs) {
+    this.activeBuffs = Array.isArray(buffs) ? buffs : []
+    // 重新应用所有增益效果
+    this.activeBuffs.forEach(buff => {
+      if (buff.effect && typeof buff.effect === 'function') {
+        buff.effect(player)
+      }
+    })
   }
 }
 

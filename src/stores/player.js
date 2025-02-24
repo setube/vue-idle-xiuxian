@@ -139,6 +139,18 @@ export const usePlayerStore = defineStore('player', {
     eventTriggered: 0,  // 触发事件次数
     unlockedPillRecipes: 0,  // 解锁丹方数量
     // 秘境相关数据
+    isDungeonRunning: false,
+    dungeonProgress: 1,
+    // 添加更详细的副本状态
+    dungeonState: {
+      floor: 1,
+      showingOptions: false,
+      currentOptions: [],
+      inCombat: false,
+      enemy: null,
+      selectedBuffs: [], // 添加已选择的增益状态
+      activeBuffs: {}    // 添加实际生效的增益效果
+    },
     dungeonHighestFloor: 0,  // 最高通关层数
     dungeonLastFailedFloor: 0,  // 最后失败层数
     dungeonTotalRuns: 0,  // 总探索次数
@@ -672,62 +684,6 @@ export const usePlayerStore = defineStore('player', {
         }
       }
       this.saveData()
-    },
-    // 炼制丹药
-    craftPill (recipeId) {
-      const recipe = pillRecipes.find(r => r.id === recipeId)
-      if (!recipe || !this.pillRecipes.includes(recipeId)) {
-        return { success: false, message: '未掌握丹方' }
-      }
-      const fragments = this.pillFragments[recipeId] || 0
-      const result = tryCreatePill(recipe, this.herbs, this, fragments, this.luck * this.alchemyRate)
-      if (result.success) {
-        // 消耗材料
-        recipe.materials.forEach(material => {
-          for (let i = 0; i < material.count; i++) {
-            const index = this.herbs.findIndex(h => h.id === material.herb)
-            if (index > -1) {
-              this.herbs.splice(index, 1)
-            }
-          }
-        })
-        // 创建丹药
-        const effect = calculatePillEffect(recipe, this.level)
-        const pill = {
-          id: `${recipe.id}_${Date.now()}`,
-          name: recipe.name,
-          description: recipe.description,
-          type: 'pill',
-          effect
-        }
-        this.items.push(pill)
-        this.pillsCrafted++
-        this.saveData()
-      }
-      return result
-    },
-    // 使用丹药
-    useItem (item) {
-      if (item.type === 'pill') {
-        const now = Date.now()
-        // 添加效果
-        this.activeEffects.push({
-          ...item.effect,
-          startTime: now,
-          endTime: now + (item.effect.duration * 1000)
-        })
-        // 移除已使用的丹药
-        const index = this.items.findIndex(i => i.id === item.id)
-        if (index > -1) {
-          this.items.splice(index, 1)
-          this.pillsConsumed++
-        }
-        // 清理过期效果
-        this.activeEffects = this.activeEffects.filter(effect => effect.endTime > now)
-        this.saveData()
-        return true
-      }
-      return false
     },
     // 获取当前有效的丹药效果
     getActiveEffects () {
