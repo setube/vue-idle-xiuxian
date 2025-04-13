@@ -9,7 +9,7 @@ export const usePlayerStore = defineStore('player', {
     // 是否新玩家
     isNewPlayer: true,
     // GM模式开关
-    isGMMode: false,
+    isGMMode: true,
     // 主题设置
     isDarkMode: localStorage.getItem('darkMode') === 'true',
     // 灵宠系统
