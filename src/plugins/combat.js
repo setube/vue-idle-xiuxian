@@ -176,6 +176,7 @@ class CombatManager {
   }
   // 执行回合
   executeTurn () {
+    this.log = [] // clear log at the start of each turn
     if (this.state !== CombatState.IN_PROGRESS) return null
     this.round++
     // 检查是否超过最大回合数
@@ -356,10 +357,6 @@ function generateEnemy (level, type = CombatType.NORMAL, difficulty = 1) {
   )
 }
 export {
-  CombatState,
-  CombatType,
-  CombatStats,
   CombatEntity,
-  CombatManager,
-  generateEnemy
+  CombatManager, CombatState, CombatStats, CombatType, generateEnemy
 }

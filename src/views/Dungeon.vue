@@ -1,12 +1,12 @@
 <script setup>
+import { useMessage } from 'naive-ui'
 import { ref } from 'vue'
-import { usePlayerStore } from '../stores/player'
-import { getRealmName } from '../plugins/realm'
-import { CombatManager, CombatEntity, generateEnemy, CombatType } from '../plugins/combat'
+import LogPanel from '../components/LogPanel.vue'
+import { CombatEntity, CombatManager, CombatType, generateEnemy } from '../plugins/combat'
 import { getRandomOptions } from '../plugins/dungeon'
 import dungeonBuffs from '../plugins/dungeonBuffs'
-import { useMessage } from 'naive-ui'
-import LogPanel from '../components/LogPanel.vue'
+import { getRealmName } from '../plugins/realm'
+import { usePlayerStore } from '../stores/player'
 
 const playerStore = usePlayerStore()
 const message = useMessage()
@@ -213,42 +213,55 @@ const startCombat = () => {
   autoCombat() // 开始自动战斗
 }
 
-// 自动战斗
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 const autoCombat = async () => {
   while (dungeonState.value.inCombat) {
-    const result = dungeonState.value.combatManager.executeTurn()
-    const getCombatLog = dungeonState.value.combatManager.getCombatLog()
-    // 添加动画效果
-    if (result.attacker === dungeonState.value.combatManager.player) {
-      playerAttacking.value = true
-      enemyHurt.value = true
-      await new Promise(resolve => setTimeout(resolve, 500))
-      playerAttacking.value = false
-      enemyHurt.value = false
-    } else {
-      enemyAttacking.value = true
-      playerHurt.value = true
-      await new Promise(resolve => setTimeout(resolve, 500))
-      enemyAttacking.value = false
-      playerHurt.value = false
+    const { combatManager } = dungeonState.value;
+    const turnResult = combatManager.executeTurn();
+    const combatLog = combatManager.getCombatLog();
+
+    switch (turnResult.state) {
+      case 'victory':
+        handleVictory();
+        break;
+      case 'defeat':
+        handleDefeat();
+        break;
     }
-    if (!result) break
-    // 更新战斗日志
-    getCombatLog.forEach(item => {
-      logRef.value?.addLog('info', item)
-    })
-    // 检查战斗是否结束
-    if (result.state === 'victory') {
-      handleVictory()
-      break
-    } else if (result.state === 'defeat') {
-      handleDefeat()
-      break
+
+    for (const turn of turnResult.results) {
+      if (!turn) {break;}
+
+      const isPlayerTurn = turn.attacker === combatManager.player?.name;
+
+      if (isPlayerTurn) {
+        playerAttacking.value = true;
+        enemyHurt.value = true;
+      } else {
+        enemyAttacking.value = true;
+        playerHurt.value = true;
+      }
+
+      await sleep(500);
+
+      // Reset animation
+      playerAttacking.value = false;
+      enemyHurt.value = false;
+      enemyAttacking.value = false;
+      playerHurt.value = false;
+
+      await sleep(500);
     }
-    // 添加延迟使战斗动画更流畅
-    await new Promise(resolve => setTimeout(resolve, 500))
+
+    // Combat log
+    combatLog.forEach((log) => {
+      logRef.value?.addLog('info', log);
+    });
+
+    await sleep(500);
   }
-}
+};
 
 // 处理胜利
 const handleVictory = () => {
