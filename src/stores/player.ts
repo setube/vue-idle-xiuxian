@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia'
 import { pillRecipes, tryCreatePill, calculatePillEffect } from '../plugins/pills'
 import { decryptData, encryptData, validateData } from '../plugins/crypto'
-import type { PlayerState, ActionResult } from '../types/player'
+import { DATA_SYNC_INTERVALS_SECONDS, DEFAULT_DATA_SYNC_INTERVAL_SECONDS } from '../types/player'
+import type { DataSyncIntervalSeconds, PlayerState, ActionResult } from '../types/player'
 import type { Equipment, EquipmentSlot, GameItem, Herb, Pet, Pill, Stats } from '../types/game'
 import { assert, assertFiniteNumber } from '../utils/assert'
 import { normalizePlayerData } from './save'
@@ -14,6 +15,7 @@ import {
   playerSaveStorage,
   readPersistedPlayerSave,
   readPersistedPlayerState,
+  reschedulePlayerPersistence,
   registerPlayerPersistenceStore,
   schedulePlayerPersistence
 } from './player-persistence'
@@ -28,6 +30,8 @@ export const createInitialState = (): PlayerState => ({
     isGMMode: false,
     // 主题设置
     isDarkMode: typeof localStorage !== 'undefined' && localStorage.getItem('darkMode') === 'true',
+    // 玩家数据同步间隔，默认5秒
+    dataSyncIntervalSeconds: DEFAULT_DATA_SYNC_INTERVAL_SECONDS,
     // 灵宠系统
     activePet: null, // 当前出战的灵宠
     petEssence: 0, // 灵宠精华
@@ -372,6 +376,12 @@ export const usePlayerStore = defineStore('player', {
     // Coalesce frequent game ticks; timers and promises never become save data.
     saveData(): Promise<void> {
       return schedulePlayerPersistence(this)
+    },
+    setDataSyncInterval(seconds: number): void {
+      assert(DATA_SYNC_INTERVALS_SECONDS.includes(seconds as DataSyncIntervalSeconds), '数据同步间隔无效')
+      this.dataSyncIntervalSeconds = seconds as DataSyncIntervalSeconds
+      // Keep the pending batch but align its deadline to the newly selected interval.
+      reschedulePlayerPersistence(this)
     },
     async flushData(): Promise<void> {
       await persistPlayerImmediately(this)

@@ -1,12 +1,12 @@
 import type { StateTree } from 'pinia'
 import type { Serializer, StorageLike } from 'pinia-plugin-persistedstate'
 import { nextTick } from 'vue'
-import type { PlayerState } from '../types/player'
+import { DATA_SYNC_INTERVALS_SECONDS, DEFAULT_DATA_SYNC_INTERVAL_SECONDS } from '../types/player'
+import type { DataSyncIntervalSeconds, PlayerState } from '../types/player'
 import { decryptData, encryptData, validateData, assertPlayerData } from '../plugins/crypto'
 import { normalizePlayerData } from './save'
 
 export const PLAYER_SAVE_KEY = 'vue-idle-xiuxian:player:v2'
-const SAVE_DELAY_MS = 2000
 const AUTO_PERSIST_SENTINEL = ''
 
 export interface PersistablePlayerStore {
@@ -210,11 +210,31 @@ export function schedulePlayerPersistence(store = registeredStore): Promise<void
     promise,
     resolve,
     reject,
-    timer: setTimeout(() => { void commitPending(store) }, SAVE_DELAY_MS)
+    timer: setTimeout(() => { void commitPending(store) }, getPlayerDataSyncDelayMs(store.$state.dataSyncIntervalSeconds))
   }
   persistence.pending = pending
   void promise.catch(() => undefined)
   return promise
+}
+
+/** Re-time an existing coalesced write after the player changes the sync interval. */
+export function reschedulePlayerPersistence(store = registeredStore): void {
+  if (!store) return
+  const persistence = persistenceFor(store)
+  const pending = persistence.pending
+  if (!pending) {
+    void schedulePlayerPersistence(store)
+    return
+  }
+  clearTimeout(pending.timer)
+  pending.timer = setTimeout(() => { void commitPending(store) }, getPlayerDataSyncDelayMs(store.$state.dataSyncIntervalSeconds))
+}
+
+export function getPlayerDataSyncDelayMs(interval: number): number {
+  const safeInterval = DATA_SYNC_INTERVALS_SECONDS.includes(interval as DataSyncIntervalSeconds)
+    ? interval
+    : DEFAULT_DATA_SYNC_INTERVAL_SECONDS
+  return safeInterval * 1000
 }
 
 /** Force one encrypted write immediately through the configured Pinia serializer. */

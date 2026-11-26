@@ -1,7 +1,7 @@
 {
   "name": "vue-idle-xiuxian",
   "private": true,
-  "version": "1.1.0",
+  "version": "1.1.1",
   "type": "module",
   "packageManager": "bun@1.4.5",
   "engines": {

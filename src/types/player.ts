@@ -1,9 +1,14 @@
 import type { ActiveEffect, Equipment, EquipmentSlot, GameItem, Herb, Pet, Stats } from './game'
 
+export const DATA_SYNC_INTERVALS_SECONDS = [1, 2, 5, 10, 30] as const
+export type DataSyncIntervalSeconds = typeof DATA_SYNC_INTERVALS_SECONDS[number]
+export const DEFAULT_DATA_SYNC_INTERVAL_SECONDS: DataSyncIntervalSeconds = 5
+
 export interface PlayerState {
   isNewPlayer: boolean
   isGMMode: boolean
   isDarkMode: boolean
+  dataSyncIntervalSeconds: DataSyncIntervalSeconds
   activePet: Pet | null
   petEssence: number
   petConfig: { rarityMap: Record<string, { name: string; color: string; probability: number; essenceBonus: number }> }

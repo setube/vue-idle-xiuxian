@@ -7,6 +7,10 @@
           <n-input v-model:value="newName" placeholder="输入新的道号" clearable :maxlength="maxLength" show-count />
           <n-button type="primary" @click="handleChangeName" :disabled="!newName">修改道号</n-button>
         </n-input-group>
+        <n-form-item label="数据同步间隔" :show-feedback="false">
+          <n-select v-model:value="dataSyncInterval" :options="dataSyncIntervalOptions" style="width: 160px" />
+        </n-form-item>
+        <n-text depth="3">间隔越短，存档同步越及时，但会占用更多性能。默认每 5 秒同步一次。</n-text>
         <n-alert title="必看说明" type="warning">
           本游戏为开源项目，如果您在任何地方通过付费方式购买了本游戏，请及时退款并投诉举报。
         </n-alert>
@@ -35,10 +39,11 @@
 
 <script setup lang="ts">
   import { usePlayerStore } from '../stores/player'
-  import { ref } from 'vue'
+  import { computed, ref } from 'vue'
   import { useDialog, useMessage } from 'naive-ui'
   import { saveAs } from 'file-saver'
   import type { UploadFileInfo } from 'naive-ui'
+  import { DATA_SYNC_INTERVALS_SECONDS, type DataSyncIntervalSeconds } from '../types/player'
 
   const clickCount = ref(0)
   const newName = ref('')
@@ -47,6 +52,20 @@
   const playerStore = usePlayerStore()
   const dialog = useDialog()
   const version = __APP_VERSION__
+  const dataSyncIntervalOptions = DATA_SYNC_INTERVALS_SECONDS.map(seconds => ({ label: `${seconds} 秒`, value: seconds }))
+  const dataSyncInterval = computed<DataSyncIntervalSeconds>({
+    get: () => playerStore.dataSyncIntervalSeconds,
+    set: seconds => { void updateDataSyncInterval(seconds) }
+  })
+
+  const updateDataSyncInterval = async (seconds: DataSyncIntervalSeconds): Promise<void> => {
+    try {
+      await playerStore.setDataSyncInterval(seconds)
+      message.success(`数据同步间隔已设置为 ${seconds} 秒`)
+    } catch (error: unknown) {
+      message.error('更新同步间隔失败：' + (error instanceof Error ? error.message : String(error)))
+    }
+  }
 
   // 导出存档
   const handleExportSave = async () => {

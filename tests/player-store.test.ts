@@ -11,6 +11,7 @@ import {
   readLegacyPlayerSave
 } from '../src/stores/legacy-save'
 import {
+  getPlayerDataSyncDelayMs,
   getPlayerSaveStatus,
   readPersistedPlayerSave
 } from '../src/stores/player-persistence'
@@ -99,6 +100,39 @@ describe('player persistence and pill effects', () => {
     expect(store.pillsConsumed).toBe(1)
     expect(store.usePill(pill).success).toBe(false)
     expect(store.pillsConsumed).toBe(1)
+  })
+
+  test('data sync interval defaults to five seconds and can be changed and saved', async () => {
+    expect(store.dataSyncIntervalSeconds).toBe(5)
+    expect(getPlayerDataSyncDelayMs(store.dataSyncIntervalSeconds)).toBe(5000)
+    expect(getPlayerDataSyncDelayMs(1)).toBe(1000)
+    expect(getPlayerDataSyncDelayMs(30)).toBe(30000)
+    expect(getPlayerDataSyncDelayMs(4)).toBe(5000)
+
+    const originalSetTimeout = globalThis.setTimeout
+    const scheduledDelays: number[] = []
+    globalThis.setTimeout = ((handler: TimerHandler, delay?: number) => {
+      scheduledDelays.push(Number(delay ?? 0))
+      return originalSetTimeout(handler as (...args: never[]) => void, delay)
+    }) as unknown as typeof globalThis.setTimeout
+    try {
+      store.name = '同步间隔测试'
+      const pending = store.saveData()
+      expect(scheduledDelays).toEqual([5000])
+
+      store.setDataSyncInterval(10)
+      expect(store.dataSyncIntervalSeconds).toBe(10)
+      expect(getPlayerDataSyncDelayMs(store.dataSyncIntervalSeconds)).toBe(10000)
+      expect(scheduledDelays).toEqual([5000, 10000])
+      await store.flushData()
+      await pending
+      expect(decryptData(readPersistedPlayerSave()!)).toMatchObject({ dataSyncIntervalSeconds: 10, name: '同步间隔测试' })
+
+      expect(() => store.setDataSyncInterval(4)).toThrow('数据同步间隔无效')
+      expect(store.dataSyncIntervalSeconds).toBe(10)
+    } finally {
+      globalThis.setTimeout = originalSetTimeout
+    }
   })
 
   test('each configured effect contributes to the corresponding effective player stats', () => {

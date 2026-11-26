@@ -1,5 +1,6 @@
 import type { ActiveEffect, EquipmentSlot, GameItem, Herb, Pet, Stats } from '../types/game'
-import type { PlayerState } from '../types/player'
+import { DATA_SYNC_INTERVALS_SECONDS } from '../types/player'
+import type { DataSyncIntervalSeconds, PlayerState } from '../types/player'
 import { assertPlayerData } from '../plugins/crypto'
 import { getRealmLength } from '../plugins/realm'
 import { assert, assertFiniteNumber, isRecord } from '../utils/assert'
@@ -97,6 +98,7 @@ export function normalizePlayerData(value: unknown, defaults: PlayerState, now =
     else if (Array.isArray(initial)) assert(Array.isArray(saved), key + '必须是数组')
     normalized[key] = saved
   }
+  assert(DATA_SYNC_INTERVALS_SECONDS.includes(normalized.dataSyncIntervalSeconds as DataSyncIntervalSeconds), '数据同步间隔无效')
   for (const key of ['baseAttributes', 'combatAttributes', 'combatResistance', 'specialAttributes', 'artifactBonuses'] as const) {
     normalized[key] = { ...defaults[key], ...readStats(normalized[key]) }
   }
