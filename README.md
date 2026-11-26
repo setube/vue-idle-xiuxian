@@ -75,8 +75,8 @@ bun run preview
 从当前源码构建 Docker 镜像：
 
 ```bash
-docker build -t vue-idle-xiuxian:1.1.1 .
-docker run --rm -p 8183:8080 vue-idle-xiuxian:1.1.1
+docker build -t vue-idle-xiuxian:1.1.0 .
+docker run --rm -p 8183:8080 vue-idle-xiuxian:1.1.0
 ```
 
 依赖升级至本次发布时的最新兼容稳定版本；TypeScript 使用和 Vue 类型检查器兼容的 6.0 系列。
@@ -87,7 +87,7 @@ docker run --rm -p 8183:8080 vue-idle-xiuxian:1.1.1
 
 灵力容量按当前境界修炼所需资源计算，至少容纳一整个境界的突破消耗；日月丹可提高容量。旧存档中已超过容量的灵力会保留。
 
-项目于 2026 年 11 月发布 1.1.1，新增可配置的数据同步间隔，默认每 5 秒同步一次。间隔越短，同步越及时，但性能开销越高。具体变更见 [CHANGELOG.md](CHANGELOG.md)。
+项目于 2026 年 11 月发布 1.1.0，新增可配置的数据同步间隔，默认每 5 秒同步一次。间隔越短，同步越及时，但性能开销越高。具体变更见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 社区与安全
 
