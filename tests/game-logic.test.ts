@@ -61,7 +61,7 @@ test('raises exploration costs tenfold to curb high-realm spirit accumulation', 
 test('applies auto-heal effects at the start of a combat turn', () => {
   const player = new CombatEntity('修士', 1, {
     health: 100, maxHealth: 100, damage: 1000, speed: 1000, autoHeal: 0.1,
-    critRate: 0, comboRate: 0, vampireRate: 0
+    critRate: 0, comboRate: 0, vampireRate: 0, dodgeResist: 1
   })
   const enemy = new CombatEntity('妖兽', 1, { health: 100, maxHealth: 100, damage: 1, speed: 1, dodgeRate: 0 })
   player.currentHealth = 50
