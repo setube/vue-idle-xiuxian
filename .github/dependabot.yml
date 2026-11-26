@@ -4,6 +4,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: typescript
+        versions:
+          - ">=7.0.0"
     open-pull-requests-limit: 5
     labels:
       - dependencies
