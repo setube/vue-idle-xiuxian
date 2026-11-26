@@ -54,10 +54,11 @@
   </n-layout>
 </template>
 
-<script setup>
+<script setup lang="ts">
   import { usePlayerStore } from '../stores/player'
   import { ref } from 'vue'
   import { useMessage } from 'naive-ui'
+  import type { PlayerState } from '../types/player'
 
   const playerStore = usePlayerStore()
   const message = useMessage()
@@ -83,18 +84,12 @@
   const updateAttributes = () => {
     try {
       // 更新基础属性
-      Object.entries(baseAttributes.value).forEach(([key, value]) => {
-        if (typeof value === 'number') {
-          playerStore[key] = Number(value)
-        } else {
-          playerStore[key] = value
-        }
-      })
+      Object.assign(playerStore, baseAttributes.value)
       // 保存数据
       playerStore.saveData()
       message.success('属性更新成功')
-    } catch (error) {
-      message.error('更新失败：' + error.message)
+    } catch (error: unknown) {
+      message.error('更新失败：' + (error instanceof Error ? error.message : String(error)))
     }
   }
 
@@ -105,13 +100,14 @@
       await playerStore.initializePlayer()
       message.success('数据重置成功')
       // 刷新显示的数据
-      Object.entries(playerStore).forEach(([key, value]) => {
-        if (key in baseAttributes.value) {
-          baseAttributes.value[key] = value
-        }
-      })
-    } catch (error) {
-      message.error('重置失败：' + error.message)
+      Object.assign(
+        baseAttributes.value,
+        Object.fromEntries(
+          Object.keys(baseAttributes.value).map(key => [key, playerStore[key as keyof PlayerState]])
+        )
+      )
+    } catch (error: unknown) {
+      message.error('重置失败：' + (error instanceof Error ? error.message : String(error)))
     }
   }
 </script>

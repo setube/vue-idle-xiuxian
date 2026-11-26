@@ -36,7 +36,7 @@
             <n-space justify="space-between">
               <n-space>
                 <span>{{ getHerbName(material.herb) }}</span>
-                <n-tag size="small">需要数量: {{ material.count }}</n-tag>
+                <n-tag size="small">需要数量: <NumericValue :value="material.count" /></n-tag>
               </n-space>
               <n-tag
                 :type="getMaterialStatus(material) === `${material.count}/${material.count}` ? 'success' : 'warning'"
@@ -54,9 +54,9 @@
           <n-descriptions-item label="丹药介绍">
             {{ selectedRecipe.description }}
           </n-descriptions-item>
-          <n-descriptions-item label="效果数值">+{{ (currentEffect.value * 100).toFixed(1) }}%</n-descriptions-item>
-          <n-descriptions-item label="持续时间">{{ Math.floor(currentEffect.duration / 60) }}分钟</n-descriptions-item>
-          <n-descriptions-item label="成功率">{{ (currentEffect.successRate * 100).toFixed(1) }}%</n-descriptions-item>
+          <n-descriptions-item label="效果数值">+<NumericValue :value="((currentEffect?.value ?? 0) * 100).toFixed(1)" />%</n-descriptions-item>
+          <n-descriptions-item label="持续时间"><NumericValue :value="Math.floor((currentEffect?.duration ?? 0) / 60)" />分钟</n-descriptions-item>
+          <n-descriptions-item label="成功率"><NumericValue :value="((currentEffect?.successRate ?? 0) * 100).toFixed(1)" />%</n-descriptions-item>
         </n-descriptions>
       </template>
       <!-- 炼制按钮 -->
@@ -75,18 +75,21 @@
   </n-card>
 </template>
 
-<script setup>
+<script setup lang="ts">
+  import NumericValue from '../components/NumericValue.vue'
+
   import { ref, computed } from 'vue'
   import { usePlayerStore } from '../stores/player'
   import { pillRecipes, pillGrades, pillTypes, calculatePillEffect } from '../plugins/pills'
+  import type { PillRecipe, RecipeMaterial } from '../plugins/pills'
   import { herbs } from '../plugins/herbs'
   import LogPanel from '../components/LogPanel.vue'
 
   const playerStore = usePlayerStore()
-  const logRef = ref(null)
+  const logRef = ref<InstanceType<typeof LogPanel> | null>(null)
 
   // 当前选择的丹方
-  const selectedRecipe = ref(null)
+  const selectedRecipe = ref<PillRecipe | null>(null)
 
   // 已解锁的丹方列表
   const unlockedRecipes = computed(() => {
@@ -94,27 +97,27 @@
   })
 
   // 选择丹方
-  const selectRecipe = recipe => {
+  const selectRecipe = (recipe: PillRecipe) => {
     selectedRecipe.value = recipe
   }
 
   // 检查材料是否充足
-  const checkMaterials = recipe => {
+  const checkMaterials = (recipe: PillRecipe | null) => {
     if (!recipe) return false
     return recipe.materials.every(material => {
-      const count = playerStore.herbs.filter(h => h.id === material.herb).length
+      const count = playerStore.countHerbs(material.herb)
       return count >= material.count
     })
   }
 
   // 获取材料状态文本
-  const getMaterialStatus = material => {
-    const count = playerStore.herbs.filter(h => h.id === material.herb).length
+  const getMaterialStatus = (material: RecipeMaterial) => {
+    const count = playerStore.countHerbs(material.herb)
     return `${count}/${material.count}`
   }
 
   // 获取灵草名称
-  const getHerbName = herbId => {
+  const getHerbName = (herbId: string) => {
     const herb = herbs.find(h => h.id === herbId)
     return herb ? herb.name : herbId
   }

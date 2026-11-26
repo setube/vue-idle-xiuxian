@@ -1,12 +1,23 @@
 {
   "name": "vue-idle-xiuxian",
   "private": true,
-  "version": "1.0.5",
+  "version": "1.1.0",
   "type": "module",
+  "packageManager": "bun@1.4.5",
+  "engines": {
+    "bun": ">=1.4.5",
+    "node": ">=22.12.0"
+  },
   "scripts": {
-    "dev": "vite --open --port 2025",
-    "build": "vite build",
-    "preview": "vite preview --open --port 2026"
+    "dev": "bun --bun vite --open --port 2025",
+    "typecheck": "bun --bun vue-tsc --noEmit",
+    "test": "bun test",
+    "check": "bun run typecheck && bun run test",
+    "build": "bun run typecheck && bun --bun vite build",
+    "preview": "bun --bun vite preview --open --port 2026"
+  },
+  "overrides": {
+    "zod": "^4.6.7"
   },
   "dependencies": {
     "@ant-design/icons-vue": "^7.0.1",
@@ -14,16 +25,24 @@
     "@vicons/ionicons5": "^0.13.0",
     "crypto-js": "^4.2.0",
     "file-saver": "^2.0.5",
-    "pinia": "^3.0.1",
-    "naive-ui": "^2.41.0",
-    "vite-plugin-bundle-obfuscator": "^1.4.1",
-    "vue": "^3.5.13",
-    "vue-router": "4"
+    "naive-ui": "^2.45.3",
+    "pinia": "^4.1.0",
+    "pinia-plugin-persistedstate": "^4.7.1",
+    "vue": "^3.5.46",
+    "vue-router": "^5.5.1"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^5.2.1",
-    "unplugin-auto-import": "^19.1.0",
-    "unplugin-vue-components": "^28.1.0",
-    "vite": "^6.1.0"
+    "@types/bun": "^1.4.5",
+    "@types/crypto-js": "^4.2.2",
+    "@types/file-saver": "^2.0.7",
+    "@types/node": "^26.6.11",
+    "@vitejs/plugin-vue": "^6.0.11",
+    "fake-indexeddb": "^6.2.8",
+    "typescript": "^6.0.0",
+    "unplugin-auto-import": "^21.1.0",
+    "unplugin-vue-components": "^32.1.0",
+    "vite": "^8.3.8",
+    "vite-plugin-bundle-obfuscator": "^1.14.0",
+    "vue-tsc": "^3.3.14"
   }
 }

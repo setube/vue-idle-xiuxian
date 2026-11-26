@@ -52,7 +52,7 @@
                 <n-card hoverable>
                   <template #header>
                     <n-space justify="space-between">
-                      <span>{{ herb.name }}({{ herb.count }})</span>
+                      <span>{{ herb.name }}(<NumericValue :value="herb.count" />)</span>
                     </n-space>
                   </template>
                   <p>{{ herb.description }}</p>
@@ -67,7 +67,7 @@
                 <n-card hoverable>
                   <template #header>
                     <n-space justify="space-between">
-                      <span>{{ pill.name }}({{ pill.count }})</span>
+                      <span>{{ pill.name }}(<NumericValue :value="pill.count" />)</span>
                       <n-button size="small" type="primary" @click="usePill(pill)">服用</n-button>
                     </n-space>
                   </template>
@@ -176,12 +176,12 @@
                   </template>
                   <p>{{ pet.description }}</p>
                   <n-space vertical>
-                    <n-tag :style="{ color: petRarities[pet.rarity].color }">
-                      {{ petRarities[pet.rarity].name }}
+                    <n-tag :style="{ color: getPetRarityInfo(pet.rarity).color }">
+                      {{ getPetRarityInfo(pet.rarity).name }}
                     </n-tag>
                     <n-space justify="space-between">
-                      <n-text>等级: {{ pet.level || 1 }}</n-text>
-                      <n-text>星级: {{ pet.star || 0 }}</n-text>
+                      <n-text>等级: <NumericValue :value="pet.level || 1" /></n-text>
+                      <n-text>星级: <NumericValue :value="pet.star || 0" /></n-text>
                       <n-button size="small" @click="showPetDetails(pet)">详情</n-button>
                     </n-space>
                   </n-space>
@@ -200,24 +200,24 @@
       <n-descriptions bordered>
         <n-descriptions-item label="名称">{{ selectedPet.name }}</n-descriptions-item>
         <n-descriptions-item label="品质">
-          <n-tag :style="{ color: petRarities[selectedPet.rarity].color }">
-            {{ petRarities[selectedPet.rarity].name }}
+          <n-tag :style="{ color: getPetRarityInfo(selectedPet.rarity).color }">
+            {{ getPetRarityInfo(selectedPet.rarity).name }}
           </n-tag>
         </n-descriptions-item>
-        <n-descriptions-item label="等级">{{ selectedPet.level || 1 }}</n-descriptions-item>
-        <n-descriptions-item label="星级">{{ selectedPet.star || 0 }}</n-descriptions-item>
-        <n-descriptions-item label="境界">{{ Math.floor((selectedPet.star || 0) / 5) }}阶</n-descriptions-item>
+        <n-descriptions-item label="等级"><NumericValue :value="selectedPet.level || 1" /></n-descriptions-item>
+        <n-descriptions-item label="星级"><NumericValue :value="selectedPet.star || 0" /></n-descriptions-item>
+        <n-descriptions-item label="境界"><NumericValue :value="Math.floor((selectedPet.star || 0) / 5)" />阶</n-descriptions-item>
       </n-descriptions>
       <n-divider>属性加成</n-divider>
       <n-descriptions bordered>
         <n-descriptions-item label="攻击加成">
-          +{{ (getPetBonus(selectedPet).attack * 100).toFixed(1) }}%
+          +<NumericValue :value="(getPetBonus(selectedPet).attack * 100).toFixed(1)" />%
         </n-descriptions-item>
         <n-descriptions-item label="防御加成">
-          +{{ (getPetBonus(selectedPet).defense * 100).toFixed(1) }}%
+          +<NumericValue :value="(getPetBonus(selectedPet).defense * 100).toFixed(1)" />%
         </n-descriptions-item>
         <n-descriptions-item label="生命加成">
-          +{{ (getPetBonus(selectedPet).health * 100).toFixed(1) }}%
+          +<NumericValue :value="(getPetBonus(selectedPet).health * 100).toFixed(1)" />%
         </n-descriptions-item>
       </n-descriptions>
       <n-divider>灵宠属性</n-divider>
@@ -233,67 +233,67 @@
           <n-divider>战斗属性</n-divider>
           <n-descriptions bordered :column="3">
             <n-descriptions-item label="暴击率">
-              {{ ((selectedPet.combatAttributes?.critRate || 0) * 100).toFixed(1) }}%
+              <NumericValue :value="((selectedPet.combatAttributes?.critRate || 0) * 100).toFixed(1)" />%
             </n-descriptions-item>
             <n-descriptions-item label="连击率">
-              {{ ((selectedPet.combatAttributes?.comboRate || 0) * 100).toFixed(1) }}%
+              <NumericValue :value="((selectedPet.combatAttributes?.comboRate || 0) * 100).toFixed(1)" />%
             </n-descriptions-item>
             <n-descriptions-item label="反击率">
-              {{ ((selectedPet.combatAttributes?.counterRate || 0) * 100).toFixed(1) }}%
+              <NumericValue :value="((selectedPet.combatAttributes?.counterRate || 0) * 100).toFixed(1)" />%
             </n-descriptions-item>
             <n-descriptions-item label="眩晕率">
-              {{ ((selectedPet.combatAttributes?.stunRate || 0) * 100).toFixed(1) }}%
+              <NumericValue :value="((selectedPet.combatAttributes?.stunRate || 0) * 100).toFixed(1)" />%
             </n-descriptions-item>
             <n-descriptions-item label="闪避率">
-              {{ ((selectedPet.combatAttributes?.dodgeRate || 0) * 100).toFixed(1) }}%
+              <NumericValue :value="((selectedPet.combatAttributes?.dodgeRate || 0) * 100).toFixed(1)" />%
             </n-descriptions-item>
             <n-descriptions-item label="吸血率">
-              {{ ((selectedPet.combatAttributes?.vampireRate || 0) * 100).toFixed(1) }}%
+              <NumericValue :value="((selectedPet.combatAttributes?.vampireRate || 0) * 100).toFixed(1)" />%
             </n-descriptions-item>
           </n-descriptions>
           <n-divider>战斗抗性</n-divider>
           <n-descriptions bordered :column="3">
             <n-descriptions-item label="抗暴击">
-              {{ ((selectedPet.combatAttributes?.critResist || 0) * 100).toFixed(1) }}%
+              <NumericValue :value="((selectedPet.combatAttributes?.critResist || 0) * 100).toFixed(1)" />%
             </n-descriptions-item>
             <n-descriptions-item label="抗连击">
-              {{ ((selectedPet.combatAttributes?.comboResist || 0) * 100).toFixed(1) }}%
+              <NumericValue :value="((selectedPet.combatAttributes?.comboResist || 0) * 100).toFixed(1)" />%
             </n-descriptions-item>
             <n-descriptions-item label="抗反击">
-              {{ ((selectedPet.combatAttributes?.counterResist || 0) * 100).toFixed(1) }}%
+              <NumericValue :value="((selectedPet.combatAttributes?.counterResist || 0) * 100).toFixed(1)" />%
             </n-descriptions-item>
             <n-descriptions-item label="抗眩晕">
-              {{ ((selectedPet.combatAttributes?.stunResist || 0) * 100).toFixed(1) }}%
+              <NumericValue :value="((selectedPet.combatAttributes?.stunResist || 0) * 100).toFixed(1)" />%
             </n-descriptions-item>
             <n-descriptions-item label="抗闪避">
-              {{ ((selectedPet.combatAttributes?.dodgeResist || 0) * 100).toFixed(1) }}%
+              <NumericValue :value="((selectedPet.combatAttributes?.dodgeResist || 0) * 100).toFixed(1)" />%
             </n-descriptions-item>
             <n-descriptions-item label="抗吸血">
-              {{ ((selectedPet.combatAttributes?.vampireResist || 0) * 100).toFixed(1) }}%
+              <NumericValue :value="((selectedPet.combatAttributes?.vampireResist || 0) * 100).toFixed(1)" />%
             </n-descriptions-item>
           </n-descriptions>
           <n-divider>特殊属性</n-divider>
           <n-descriptions bordered :column="3">
             <n-descriptions-item label="强化治疗">
-              {{ ((selectedPet.combatAttributes?.healBoost || 0) * 100).toFixed(1) }}%
+              <NumericValue :value="((selectedPet.combatAttributes?.healBoost || 0) * 100).toFixed(1)" />%
             </n-descriptions-item>
             <n-descriptions-item label="强化爆伤">
-              {{ ((selectedPet.combatAttributes?.critDamageBoost || 0) * 100).toFixed(1) }}%
+              <NumericValue :value="((selectedPet.combatAttributes?.critDamageBoost || 0) * 100).toFixed(1)" />%
             </n-descriptions-item>
             <n-descriptions-item label="弱化爆伤">
-              {{ ((selectedPet.combatAttributes?.critDamageReduce || 0) * 100).toFixed(1) }}%
+              <NumericValue :value="((selectedPet.combatAttributes?.critDamageReduce || 0) * 100).toFixed(1)" />%
             </n-descriptions-item>
             <n-descriptions-item label="最终增伤">
-              {{ ((selectedPet.combatAttributes?.finalDamageBoost || 0) * 100).toFixed(1) }}%
+              <NumericValue :value="((selectedPet.combatAttributes?.finalDamageBoost || 0) * 100).toFixed(1)" />%
             </n-descriptions-item>
             <n-descriptions-item label="最终减伤">
-              {{ ((selectedPet.combatAttributes?.finalDamageReduce || 0) * 100).toFixed(1) }}%
+              <NumericValue :value="((selectedPet.combatAttributes?.finalDamageReduce || 0) * 100).toFixed(1)" />%
             </n-descriptions-item>
             <n-descriptions-item label="战斗属性提升">
-              {{ ((selectedPet.combatAttributes?.combatBoost || 0) * 100).toFixed(1) }}%
+              <NumericValue :value="((selectedPet.combatAttributes?.combatBoost || 0) * 100).toFixed(1)" />%
             </n-descriptions-item>
             <n-descriptions-item label="战斗抗性提升">
-              {{ ((selectedPet.combatAttributes?.resistanceBoost || 0) * 100).toFixed(1) }}%
+              <NumericValue :value="((selectedPet.combatAttributes?.resistanceBoost || 0) * 100).toFixed(1)" />%
             </n-descriptions-item>
           </n-descriptions>
         </n-collapse-item>
@@ -301,7 +301,7 @@
       <n-divider>操作</n-divider>
       <n-space vertical>
         <n-space justify="space-between">
-          <span>升级（消耗{{ getUpgradeCost(selectedPet) }} / {{ playerStore.petEssence }}灵宠精华）</span>
+          <span>升级（消耗<NumericValue :value="getUpgradeCost(selectedPet)" /> / <NumericValue :value="playerStore.petEssence" />灵宠精华）</span>
           <n-button size="small" type="primary" @click="upgradePet(selectedPet)" :disabled="!canUpgrade(selectedPet)">
             升级
           </n-button>
@@ -338,7 +338,7 @@
   <n-modal
     v-model:show="showEquipmentModal"
     preset="dialog"
-    :title="`${equipmentTypes[selectedEquipmentType]}列表`"
+    :title="`${equipmentTypes[selectedEquipmentType || 'weapon']}列表`"
     style="width: 800px"
   >
     <n-space vertical>
@@ -364,10 +364,10 @@
               </n-space>
             </template>
             <n-space vertical>
-              <n-tag :style="{ color: equipment.qualityInfo.color }">
-                {{ equipment.qualityInfo.name }}
+              <n-tag :style="{ color: getQualityInfo(equipment.quality).color }">
+                {{ getQualityInfo(equipment.quality).name }}
               </n-tag>
-              <n-text>境界要求：{{ getRealmName(equipment.requiredRealm).name }}</n-text>
+              <n-text>境界要求：{{ getRealmName(equipment.requiredRealm ?? 1).name }}</n-text>
             </n-space>
           </n-card>
         </n-grid-item>
@@ -379,23 +379,23 @@
   <n-modal v-model:show="showEquipmentDetailModal" preset="dialog" :title="selectedEquipment?.name || '装备详情'">
     <n-descriptions bordered>
       <n-descriptions-item label="品质">
-        <span :style="{ color: selectedEquipment?.qualityInfo.color }">
-          {{ selectedEquipment?.qualityInfo.name }}
+        <span :style="{ color: getQualityInfo(selectedEquipment?.quality).color }">
+          {{ getQualityInfo(selectedEquipment?.quality).name }}
         </span>
       </n-descriptions-item>
       <n-descriptions-item label="类型">
-        {{ equipmentTypes[selectedEquipment?.type] }}
+        {{ equipmentTypes[selectedEquipment?.type ?? 'weapon'] }}
       </n-descriptions-item>
       <n-descriptions-item label="强化等级">+{{ selectedEquipment?.enhanceLevel || 0 }}</n-descriptions-item>
       <template v-if="selectedEquipment?.stats">
         <n-descriptions-item v-for="(value, stat) in selectedEquipment.stats" :key="stat" :label="getStatName(stat)">
-          {{ formatStatValue(stat, value) }}
+          <NumericValue :value="formatStatValue(stat, value)" />
         </n-descriptions-item>
       </template>
     </n-descriptions>
     <div
       class="stats-comparison"
-      v-if="equipmentComparison && selectedEquipment?.id != playerStore.equippedArtifacts[selectedEquipment?.slot]?.id"
+      v-if="equipmentComparison && selectedEquipment && selectedEquipment.id != playerStore.equippedArtifacts[selectedEquipment.slot ?? selectedEquipment.type]?.id"
     >
       <n-divider>属性对比</n-divider>
       <n-table :bordered="false" :single-line="false">
@@ -410,11 +410,11 @@
         <tbody>
           <tr v-for="(comparison, stat) in equipmentComparison" :key="stat">
             <td>{{ getStatName(stat) }}</td>
-            <td>{{ formatStatValue(stat, comparison.current) }}</td>
-            <td>{{ formatStatValue(stat, comparison.selected) }}</td>
+            <td><NumericValue :value="formatStatValue(stat, comparison.current)" /></td>
+            <td><NumericValue :value="formatStatValue(stat, comparison.selected)" /></td>
             <td>
               <n-gradient-text :type="comparison.isPositive ? 'success' : 'error'">
-                {{ comparison.isPositive ? '+' : '' }}{{ formatStatValue(stat, comparison.diff) }}
+                {{ comparison.isPositive ? '+' : '' }}<NumericValue :value="formatStatValue(stat, comparison.diff)" />
               </n-gradient-text>
             </td>
           </tr>
@@ -437,23 +437,23 @@
         </n-space>
         <n-space>
           <n-button
-            @click="equipItem(selectedEquipment)"
-            :disabled="playerStore.level < selectedEquipment?.requiredRealm"
-            v-if="selectedEquipment?.id != playerStore.equippedArtifacts[selectedEquipment?.slot]?.id"
+            @click="selectedEquipment && equipItem(selectedEquipment)"
+            :disabled="playerStore.level < (selectedEquipment?.requiredRealm ?? 1)"
+            v-if="selectedEquipment && selectedEquipment.id != playerStore.equippedArtifacts[selectedEquipment.slot ?? selectedEquipment.type]?.id"
           >
             装备
           </n-button>
           <n-button
-            @click="unequipItem(selectedEquipment?.slot)"
-            :disabled="playerStore.level < selectedEquipment?.requiredRealm"
+            @click="selectedEquipment?.slot && unequipItem(selectedEquipment.slot)"
+            :disabled="playerStore.level < (selectedEquipment?.requiredRealm ?? 1)"
             v-else
           >
             卸下
           </n-button>
           <n-button
             type="error"
-            @click="sellEquipment(selectedEquipment)"
-            v-if="selectedEquipment?.id != playerStore.equippedArtifacts[selectedEquipment?.slot]?.id"
+            @click="selectedEquipment && sellEquipment(selectedEquipment)"
+            v-if="selectedEquipment && selectedEquipment.id != playerStore.equippedArtifacts[selectedEquipment.slot ?? selectedEquipment.type]?.id"
           >
             出售
           </n-button>
@@ -465,7 +465,7 @@
   <n-modal v-model:show="showEnhanceConfirm" preset="dialog" title="装备强化">
     <n-space vertical>
       <p>是否消耗 {{ ((selectedEquipment?.enhanceLevel || 0) + 1) * 10 }} 强化石强化装备？</p>
-      <p>当前强化石数量：{{ playerStore.reinforceStones }}</p>
+      <p>当前强化石数量：<NumericValue :value="playerStore.reinforceStones" /></p>
     </n-space>
     <template #action>
       <n-space justify="end">
@@ -487,13 +487,13 @@
         <div class="old-stats">
           <h3>原始属性</h3>
           <div v-for="(value, key) in reforgeResult.oldStats" :key="key">
-            {{ getStatName(key) }}: {{ formatStatValue(key, value) }}
+            {{ getStatName(key) }}: <NumericValue :value="formatStatValue(key, value)" />
           </div>
         </div>
         <div class="new-stats">
           <h3>新属性</h3>
           <div v-for="(value, key) in reforgeResult.newStats" :key="key">
-            {{ getStatName(key) }}: {{ formatStatValue(key, value) }}
+            {{ getStatName(key) }}: <NumericValue :value="formatStatValue(key, value)" />
           </div>
         </div>
       </div>
@@ -505,14 +505,19 @@
   </n-modal>
 </template>
 
-<script setup>
+<script setup lang="ts">
+  import NumericValue from '../components/NumericValue.vue'
+
   import { usePlayerStore } from '../stores/player'
+  import type { Equipment, EquipmentQuality, EquipmentSlot, GameItem, Herb, ItemId, Pet, PetRarity, Pill, Stats } from '../types/game'
   import { ref, computed } from 'vue'
   import { useMessage } from 'naive-ui'
   import { getStatName, formatStatValue } from '../plugins/stats'
   import { getRealmName } from '../plugins/realm'
   import { pillRecipes, pillGrades, pillTypes, calculatePillEffect } from '../plugins/pills'
+  import type { PillGrade, PillRecipe, PillType } from '../plugins/pills'
   import { enhanceEquipment, reforgeEquipment } from '../plugins/equipment'
+  import type { EquipmentChangeResult } from '../plugins/equipment'
 
   // 分页相关
   const currentPage = ref(1)
@@ -520,7 +525,7 @@
 
   // 过滤后的灵宠列表
   const filteredPets = computed(() => {
-    const pets = playerStore.items.filter(item => item.type === 'pet')
+    const pets = playerStore.items.filter((item): item is Pet => item.type === 'pet')
     if (selectedRarityToRelease.value === 'all') {
       return pets
     }
@@ -535,7 +540,7 @@
   })
 
   // 页大小改变处理
-  const onPageSizeChange = size => {
+  const onPageSizeChange = (size: number) => {
     pageSize.value = size
     currentPage.value = 1
   }
@@ -544,7 +549,7 @@
   const message = useMessage()
 
   // 使用丹药
-  const usePill = pill => {
+  const usePill = (pill: Pill) => {
     const result = playerStore.usePill(pill)
     if (result.success) {
       message.success(result.message)
@@ -554,7 +559,7 @@
   }
 
   // 灵宠品质配置
-  const petRarities = {
+  const petRarities: Record<PetRarity, { name: string; color: string; probability: number; essenceBonus: number }> = {
     divine: {
       name: '神品',
       color: '#FF0000',
@@ -586,19 +591,25 @@
       essenceBonus: 5
     }
   }
+  const getPetRarityInfo = (rarity: string) => petRarities[rarity as PetRarity] ?? petRarities.mortal
+  const getQualityInfo = (quality: string | undefined) => ({
+    common: { name: '凡品', color: '#9e9e9e' }, uncommon: { name: '下品', color: '#4caf50' },
+    rare: { name: '中品', color: '#2196f3' }, epic: { name: '上品', color: '#9c27b0' },
+    legendary: { name: '极品', color: '#ff9800' }, mythic: { name: '仙品', color: '#e91e63' }
+  }[quality ?? 'common'] ?? { name: '凡品', color: '#9e9e9e' })
 
   // 灵宠详情相关
   const showPetModal = ref(false)
-  const selectedPet = ref(null)
-  const selectedFoodPet = ref(null)
+  const selectedPet = ref<Pet | null>(null)
+  const selectedFoodPet = ref<ItemId | null>(null)
 
   // 放生确认弹窗
   const showReleaseConfirm = ref(false)
   const showBatchReleaseConfirm = ref(false)
-  const petToRelease = ref(null)
+  const petToRelease = ref<Pet | null>(null)
 
   // 显示放生确认弹窗
-  const confirmReleasePet = pet => {
+  const confirmReleasePet = (pet: Pet) => {
     petToRelease.value = pet
     showReleaseConfirm.value = true
   }
@@ -617,7 +628,7 @@
         playerStore.activePet = null
       }
       // 从背包中移除灵宠
-      const index = playerStore.items.findIndex(item => item.id === petToRelease.value.id)
+      const index = playerStore.items.findIndex(item => item.id === petToRelease.value!.id)
       if (index > -1) {
         playerStore.items.splice(index, 1)
         playerStore.saveData()
@@ -631,7 +642,7 @@
   }
 
   // 选中的放生品阶
-  const selectedRarityToRelease = ref('all')
+  const selectedRarityToRelease = ref<PetRarity | 'all'>('all')
 
   // 批量放生函数
   const batchReleasePets = () => {
@@ -650,14 +661,14 @@
   }
 
   // 显示灵宠详情
-  const showPetDetails = pet => {
+  const showPetDetails = (pet: Pet) => {
     selectedPet.value = pet
     selectedFoodPet.value = null
     showPetModal.value = true
   }
 
   // 计算灵宠属性加成
-  const getPetBonus = pet => {
+  const getPetBonus = (pet: Pet | null) => {
     if (!pet) return { attack: 0, defense: 0, health: 0 }
     const qualityBonusMap = {
       divine: 0.5,
@@ -673,8 +684,9 @@
       spiritual: 0.04,
       mortal: 0.02
     }
-    const baseBonus = qualityBonusMap[pet.rarity] || 0.05
-    const starBonus = (pet.star || 0) * (starBonusPerQuality[pet.rarity] || 0.02)
+    const rarity = pet.rarity as PetRarity
+    const baseBonus = qualityBonusMap[rarity] || 0.05
+    const starBonus = (pet.star || 0) * (starBonusPerQuality[rarity] || 0.02)
     const totalBonus = baseBonus + starBonus
     const phase = Math.floor((pet.star || 0) / 5)
     const phaseBonus = phase * (baseBonus * 0.5)
@@ -687,22 +699,22 @@
   }
 
   // 获取升级所需精华数量
-  const getUpgradeCost = pet => {
+  const getUpgradeCost = (pet: Pet) => {
     return (pet.level || 1) * 10
   }
 
   // 检查是否可以升级
-  const canUpgrade = pet => {
+  const canUpgrade = (pet: Pet) => {
     const cost = getUpgradeCost(pet)
     return playerStore.petEssence >= cost
   }
 
   // 获取可用作升星材料的灵宠列表
-  const getAvailableFoodPets = pet => {
+  const getAvailableFoodPets = (pet: Pet | null) => {
     if (!pet) return []
     return playerStore.items
       .filter(
-        item =>
+        (item): item is Pet =>
           item.type === 'pet' &&
           item.id !== pet.id &&
           item.star === pet.star &&
@@ -716,7 +728,7 @@
   }
 
   // 升级灵宠
-  const upgradePet = pet => {
+  const upgradePet = (pet: Pet) => {
     const result = playerStore.upgradePet(pet, getUpgradeCost(pet))
     if (result.success) {
       message.success(result.message)
@@ -726,13 +738,13 @@
   }
 
   // 升星灵宠
-  const evolvePet = pet => {
+  const evolvePet = (pet: Pet) => {
     if (!selectedFoodPet.value) {
       message.error('请选择用于升星的灵宠')
       return
     }
     // 通过id查找对应的灵宠对象
-    const foodPet = playerStore.items.find(item => item.id === selectedFoodPet.value)
+    const foodPet = playerStore.items.find((item): item is Pet => item.type === 'pet' && item.id === selectedFoodPet.value)
     if (!foodPet) {
       message.error('升星材料灵宠不存在')
       return
@@ -748,7 +760,7 @@
   }
 
   // 装备类型配置
-  const equipmentTypes = {
+  const equipmentTypes: Record<EquipmentSlot, string> = {
     weapon: '武器',
     head: '头部',
     body: '衣服',
@@ -765,17 +777,17 @@
   }
 
   // 当前选中的装备类型
-  const selectedType = ref('')
+  const selectedType = ref<EquipmentSlot | ''>('')
 
   // 显示装备类型弹窗
-  const showEquipmentList = type => {
+  const showEquipmentList = (type: EquipmentSlot) => {
     selectedType.value = type
     selectedEquipmentType.value = type
     showEquipmentModal.value = true
   }
 
   // 卸下装备
-  const unequipItem = slot => {
+  const unequipItem = (slot: EquipmentSlot) => {
     const result = playerStore.unequipArtifact(slot)
     if (result) {
       showEquipmentDetailModal.value = false
@@ -787,18 +799,19 @@
 
   // 装备列表相关
   const showEquipmentModal = ref(false)
-  const selectedEquipmentType = ref('')
-  const selectedQuality = ref('all')
+  const selectedEquipmentType = ref<EquipmentSlot | ''>('')
+  const selectedQuality = ref<EquipmentQuality | 'all'>('all')
   const currentEquipmentPage = ref(1)
   const equipmentPageSize = ref(8)
 
   // 装备品质选项
   const qualityOptions = computed(() => {
-    const equipmentsByQuality = {}
+    const equipmentsByQuality: Partial<Record<EquipmentQuality, number>> = {}
     playerStore.items
+      .filter((item): item is Equipment => item.type !== 'pet' && item.type !== 'pill')
       .filter(item => !selectedEquipmentType.value || item.type === selectedEquipmentType.value)
       .forEach(item => {
-        equipmentsByQuality[item.quality] = (equipmentsByQuality[item.quality] || 0) + 1
+        equipmentsByQuality[item.quality as EquipmentQuality] = (equipmentsByQuality[item.quality as EquipmentQuality] || 0) + 1
       })
     return [
       { label: '全部品质', value: 'all' },
@@ -813,7 +826,7 @@
 
   // 过滤后的装备列表
   const filteredEquipmentList = computed(() => {
-    let list = playerStore.items.filter(item => {
+    const list = playerStore.items.filter((item): item is Equipment => item.type !== 'pet' && item.type !== 'pill').filter(item => {
       if (!selectedEquipmentType.value) return false
       if (item.type !== selectedEquipmentType.value) return false
       if (selectedQuality.value !== 'all' && item.quality !== selectedQuality.value) return false
@@ -830,7 +843,7 @@
   })
 
   // 装备页大小改变处理
-  const onEquipmentPageSizeChange = size => {
+  const onEquipmentPageSizeChange = (size: number) => {
     equipmentPageSize.value = size
     currentEquipmentPage.value = 1
   }
@@ -849,7 +862,7 @@
   }
 
   // 卖出单件装备
-  const sellEquipment = async equipment => {
+  const sellEquipment = async (equipment: Equipment) => {
     const result = await playerStore.sellEquipment(equipment)
     if (result.success) {
       message.success(result.message)
@@ -860,14 +873,14 @@
   }
 
   // 显示装备详情
-  const showEquipmentDetails = equipment => {
+  const showEquipmentDetails = (equipment: Equipment | null) => {
     selectedEquipment.value = equipment
     showEquipmentDetailModal.value = true
   }
 
   // 装备详情相关
   const showEquipmentDetailModal = ref(false)
-  const selectedEquipment = ref(null)
+  const selectedEquipment = ref<Equipment | null>(null)
 
   // 强化确认弹窗
   const showEnhanceConfirm = ref(false)
@@ -876,7 +889,7 @@
   const handleEnhanceEquipment = () => {
     if (!selectedEquipment.value) return
     const result = enhanceEquipment(selectedEquipment.value, playerStore.reinforceStones)
-    if (result.success) {
+    if (result.success && result.cost != null && result.newStats && result.newLevel != null) {
       playerStore.reinforceStones -= result.cost
       selectedEquipment.value.stats = { ...result.newStats }
       selectedEquipment.value.enhanceLevel = result.newLevel
@@ -889,13 +902,13 @@
 
   // 洗练确认弹窗
   const showReforgeConfirm = ref(false)
-  const reforgeResult = ref(null)
+  const reforgeResult = ref<EquipmentChangeResult | null>(null)
 
   // 洗练装备
   const handleReforgeEquipment = () => {
     if (!selectedEquipment.value) return
     const result = reforgeEquipment(selectedEquipment.value, playerStore.refinementStones, false)
-    if (result.success) {
+    if (result.success && result.cost != null) {
       playerStore.refinementStones -= result.cost
       reforgeResult.value = result
       showReforgeConfirm.value = true
@@ -905,11 +918,12 @@
   }
 
   // 确认洗练结果
-  const confirmReforgeResult = confirm => {
+  const confirmReforgeResult = (confirm: boolean) => {
     if (!reforgeResult.value) return
     if (confirm) {
       // 用户确认后，应用新属性
-      selectedEquipment.value.stats = reforgeResult.value.newStats
+      if (!selectedEquipment.value) return
+      selectedEquipment.value.stats = reforgeResult.value.newStats ?? {}
       message.success('已确认新属性')
     } else {
       // 用户取消，保留原属性
@@ -921,7 +935,7 @@
   }
 
   // 使用装备
-  const equipItem = equipment => {
+  const equipItem = (equipment: Equipment) => {
     const result = playerStore.equipArtifact(equipment, equipment.type)
     if (result.success) {
       message.success(result.message)
@@ -934,15 +948,16 @@
 
   // 计算灵草分组
   const groupedHerbs = computed(() => {
-    const groups = {}
+    const groups: Record<string, Herb & { count: number }> = {}
     playerStore.herbs.forEach(herb => {
-      if (!groups[herb.name]) {
-        groups[herb.name] = {
+      const key = `${herb.id}:${herb.quality}`
+      if (!groups[key]) {
+        groups[key] = {
           ...herb,
-          count: 1
+          count: herb.count ?? 1
         }
       } else {
-        groups[herb.name].count++
+        groups[key].count += herb.count ?? 1
       }
     })
     return Object.values(groups)
@@ -952,7 +967,7 @@
   const groupedFormulas = computed(() => {
     // 从pillRecipes中获取完整丹方
     const complete = playerStore.pillRecipes
-      .map(recipeId => {
+      .flatMap(recipeId => {
         const recipe = pillRecipes.find(r => r.id === recipeId)
         return recipe
           ? {
@@ -963,13 +978,12 @@
               type: recipe.type,
               isComplete: true
             }
-          : null
+          : []
       })
-      .filter(Boolean)
 
     // 从pillFragments中获取残缺丹方
     const incomplete = Object.entries(playerStore.pillFragments)
-      .map(([recipeId, fragments]) => {
+      .flatMap(([recipeId, fragments]) => {
         const recipe = pillRecipes.find(r => r.id === recipeId)
         return recipe
           ? {
@@ -982,32 +996,31 @@
               fragments,
               fragmentsNeeded: recipe.fragmentsNeeded
             }
-          : null
+          : []
       })
-      .filter(Boolean)
 
     return { complete, incomplete }
   })
 
   // 计算丹药分组
   const groupedPills = computed(() => {
-    const groups = {}
+    const groups: Record<string, Pill & { count: number }> = {}
     playerStore.items
-      .filter(item => item.type === 'pill')
+      .filter((item): item is Pill => item.type === 'pill')
       .forEach(pill => {
         if (!groups[pill.name]) {
           groups[pill.name] = {
             ...pill,
-            count: 1
+          count: 1
           }
         } else {
-          groups[pill.name].count++
+        groups[pill.name].count++
         }
       })
     return Object.values(groups)
   })
   // 使用物品
-  const useItem = item => {
+  const useItem = (item: GameItem) => {
     if (item.type === 'pet') {
       const result = playerStore.usePet(item)
       if (result.success) {
@@ -1023,10 +1036,11 @@
     if (!selectedEquipment.value || !selectedEquipmentType.value) return null
     const currentEquipment = playerStore.equippedArtifacts[selectedEquipmentType.value]
     if (!currentEquipment) return null
-    const comparison = {}
-    const allStats = new Set([...Object.keys(selectedEquipment.value.stats), ...Object.keys(currentEquipment.stats)])
+    const comparison: Record<string, { current: number; selected: number; diff: number; isPositive: boolean }> = {}
+    const selected = selectedEquipment.value
+    const allStats = new Set([...Object.keys(selected.stats), ...Object.keys(currentEquipment.stats)])
     allStats.forEach(stat => {
-      const selectedValue = selectedEquipment.value.stats[stat] || 0
+      const selectedValue = selected.stats[stat] || 0
       const currentValue = currentEquipment.stats[stat] || 0
       const diff = selectedValue - currentValue
       comparison[stat] = {

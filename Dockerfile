@@ -1,16 +1,11 @@
-FROM node:latest
+FROM oven/bun:1.4.5 AS build
+WORKDIR /app
+COPY package.json bun.lock bunfig.toml ./
+RUN bun install --frozen-lockfile
+COPY . .
+RUN bun run check && bun run build
 
-RUN mkdir -p /workspace
-
-WORKDIR /workspace
-
-RUN npm config set registry https://registry.npmmirror.com
-
-RUN cd /workspace
-
-RUN git clone https://github.com/KoWming/vue-idle-xiuxian . && \
-    npm install -g pnpm && \
-    pnpm install && \
-    pnpm run build
-
-CMD ["npx", "vite", "preview", "--host", "0.0.0.0", "--port", "8080"]
+FROM nginx:stable-alpine
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/dist /usr/share/nginx/html
+EXPOSE 8080

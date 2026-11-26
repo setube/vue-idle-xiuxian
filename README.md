@@ -11,6 +11,8 @@
 ## 技术栈
 
 - **前端框架**: [Vue.js](https://cn.vuejs.org)
+- **语言**: TypeScript（严格类型检查）
+- **包管理与测试**: [Bun](https://bun.sh)
 - **构建工具**: [Vite](https://cn.vite.dev)
 - **状态管理** [Pinia](https://pinia.vuejs.org/zh)
 - **UI 组件库** [Naive UI](https://www.naiveui.com/zh-CN)
@@ -47,18 +49,45 @@ services:
         stdin_open: true
 ```
 
-## NPM 部署
+## 本地开发与部署
+
+安装 Bun 1.4.5 或更新版本。依赖使用提交的 `bun.lock`，开发、测试、CI 和 Docker 统一使用 Bun。
 
 ```bash
 # 安装依赖
-npm install
+bun install --frozen-lockfile
 
 # 开发环境运行
-npm run dev
+bun run dev
+
+# 严格类型检查与回归测试
+bun run check
 
 # 构建生产版本
-npm run build
+bun run build
+
+# 本地预览
+bun run preview
 ```
+
+构建结果输出至 `dist/`，不纳入源码提交。提交到 `main` 后，GitHub Actions 会安装 Bun 依赖、运行类型检查和回归测试、构建站点，并自动部署到 GitHub Pages。Pull request 只运行检查和构建，不会发布站点。GitHub Pages 自定义域名留在仓库设置中；Pages 会在 Actions 部署时使用仓库中已配置的域名，无须在 `public/` 添加或生成 CNAME 文件。
+
+从当前源码构建 Docker 镜像：
+
+```bash
+docker build -t vue-idle-xiuxian:1.1.0 .
+docker run --rm -p 8183:8080 vue-idle-xiuxian:1.1.0
+```
+
+依赖升级至本次发布时的最新兼容稳定版本；TypeScript 使用和 Vue 类型检查器兼容的 5.9 系列。
+
+## 存档与升级
+
+升级前可在设置中导出存档。1.1.0 会把旧版 IndexedDB 存档一次性迁移至 Pinia 持久化状态，完成后移除旧数据，并保留独立 AES 存档的导入能力。读取旧档时会合并相同灵草、移除派生字段和过期丹药效果。新存档只保存玩家状态，灵草按数量堆叠。
+
+灵力容量按当前境界修炼所需资源计算，至少容纳一整个境界的突破消耗；日月丹可提高容量。旧存档中已超过容量的灵力会保留。
+
+项目于 2026 年 11 月发布 1.1.0，修复丹药、浏览器翻译、存档体积和后期性能问题。具体变更见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 鸣谢
 

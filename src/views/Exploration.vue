@@ -29,7 +29,7 @@
                     <n-button
                       type="primary"
                       @click="exploreLocation(location)"
-                      :disabled="playerStore.spirit < location.spiritCost || isAutoExploring"
+                      :disabled="playerStore.spirit < location.spiritCost || isAutoExploring || isExploring"
                     >
                       探索
                     </n-button>
@@ -53,16 +53,16 @@
           <n-divider>探索统计</n-divider>
           <n-descriptions :column="2" bordered>
             <n-descriptions-item label="探索次数">
-              {{ playerStore.explorationCount }}
+              <NumericValue :value="playerStore.explorationCount" />
             </n-descriptions-item>
             <n-descriptions-item label="灵石数量">
-              {{ playerStore.spiritStones }}
+              <NumericValue :value="playerStore.spiritStones" />
             </n-descriptions-item>
             <n-descriptions-item label="灵草数量">
-              {{ playerStore.herbs.length }}
+              {{ playerStore.herbs.reduce((sum, herb) => sum + (herb.count ?? 1), 0) }}
             </n-descriptions-item>
             <n-descriptions-item label="丹方残页">
-              {{ Object.values(playerStore.pillFragments || {}).reduce((a, b) => a + b, 0) }}
+              <NumericValue :value="Object.values(playerStore.pillFragments || {}).reduce((a, b) => a + b, 0)" />
             </n-descriptions-item>
           </n-descriptions>
         </n-space>
@@ -75,139 +75,103 @@
   </n-layout>
 </template>
 
-<script setup>
-  import { ref } from 'vue'
+<script setup lang="ts">
+  import NumericValue from '../components/NumericValue.vue'
+  import { ref, shallowRef, computed, onMounted, onUnmounted } from 'vue'
   import { usePlayerStore } from '../stores/player'
   import { CompassOutline } from '@vicons/ionicons5'
   import { getRealmName } from '../plugins/realm'
   import { locations } from '../plugins/locations'
   import { triggerRandomEvent, getRandomReward, handleReward } from '../plugins/events'
   import LogPanel from '../components/LogPanel.vue'
+  import type { ExplorationLocation, ExplorationResult, WorkerError, MessageType } from '../types/game'
 
-  const logRef = ref(null)
+  const logRef = ref<InstanceType<typeof LogPanel> | null>(null)
   const playerStore = usePlayerStore()
-  // 探索相关数值
-  const explorationInterval = 3000 // 探索间隔（毫秒）
-  const exploringLocations = ref({}) // 记录每个地点的探索状态
-  const explorationTimers = ref({}) // 记录每个地点的定时器
-  const isAutoExploring = ref(false) // 是否有地点正在自动探索
-  const autoExploringLocationId = ref(null) // 正在自动探索的地点ID
-  const explorationWorker = ref(null)
+  const explorationInterval = 3000
+  const exploringLocations = ref<Record<string, boolean>>({})
+  const isAutoExploring = ref(false)
+  const isExploring = ref(false)
+  const explorationWorker = shallowRef<Worker | null>(null)
+  let explorationTimer: ReturnType<typeof setInterval> | undefined
+  let pendingCost = 0
+  const availableLocations = computed(() => locations.filter(loc => playerStore.level >= loc.minLevel))
+  const showMessage = (type: MessageType, content: string) => logRef.value?.addLog(type, content)
 
-  // 初始化 Web Worker
-  const initWorker = () => {
-    explorationWorker.value = new Worker(new URL('../workers/exploration.js', import.meta.url), { type: 'module' })
-    explorationWorker.value.onmessage = ({ data }) => {
-      if (data.type === 'exploration_result') {
-        handleExplorationResult(data)
-      } else if (data.type === 'error') {
-        showMessage('error', data.message)
-      }
-    }
+  const failExploration = (message: string) => {
+    playerStore.spirit += pendingCost
+    pendingCost = 0
+    isExploring.value = false
+    showMessage('error', message)
   }
 
-  // 处理探索结果
-  const handleExplorationResult = result => {
-    playerStore.spirit -= result.spiritCost
-    playerStore.explorationCount++
-
-    if (result.eventTriggered) {
-      if (triggerRandomEvent(playerStore, showMessage)) {
-        showMessage('info', '你的福缘不错，触发了一个特殊事件！')
+  onMounted(() => {
+    const worker = new Worker(new URL('../workers/exploration.ts', import.meta.url), { type: 'module' })
+    explorationWorker.value = worker
+    worker.onmessage = ({ data }: MessageEvent<ExplorationResult | WorkerError>) => {
+      if (data.type === 'error') {
+        failExploration(data.message)
+        return
       }
-    } else {
-      const location = availableLocations.value.find(loc => loc.spiritCost === result.spiritCost)
-      if (location && Array.isArray(location.rewards)) {
-        const reward = getRandomReward(location.rewards)
-        if (reward) {
-          if (result.rewardMultiplier > 1) {
-            reward.amount = Math.floor(reward.amount * result.rewardMultiplier)
-            showMessage('success', '福缘加持，获得了更多奖励！')
-          }
-          handleReward(reward, playerStore, showMessage)
-        }
+      pendingCost = 0
+      isExploring.value = false
+      playerStore.explorationCount++
+      if (data.eventTriggered) {
+        if (triggerRandomEvent(playerStore, showMessage)) showMessage('info', '你的福缘不错，触发了一个特殊事件！')
       } else {
-        showMessage('error', '无法获取探索奖励，请检查地点配置')
+        const location = availableLocations.value.find(loc => loc.id === data.locationId)
+        const reward = location ? getRandomReward(location.rewards) : null
+        if (reward) {
+          // Keep configuration immutable; repeated lucky rewards must not compound the next reward.
+          const grantedReward = { ...reward, amount: Math.floor(reward.amount * data.rewardMultiplier) }
+          if (data.rewardMultiplier > 1) showMessage('success', '福缘加持，获得了更多奖励！')
+          handleReward(grantedReward, playerStore, showMessage)
+        }
       }
+      void playerStore.saveData()
     }
-    playerStore.saveData()
-  }
+    worker.onerror = () => failExploration('探索计算失败，请重试')
+  })
 
-  // 探索指定地点
-  const exploreLocation = location => {
+  const exploreLocation = (location: ExplorationLocation) => {
+    if (isExploring.value || !explorationWorker.value) return
     if (playerStore.spirit < location.spiritCost) {
       showMessage('error', '灵力不足！')
       return
     }
+    isExploring.value = true
+    pendingCost = location.spiritCost
+    playerStore.spirit -= pendingCost
     explorationWorker.value.postMessage({
-      type: 'explore',
-      playerData: { luck: playerStore.luck },
-      location
+      type: 'explore', playerData: { luck: playerStore.luck },
+      location: { id: location.id, spiritCost: location.spiritCost }
     })
   }
 
-  // 组件挂载时初始化 Worker
-  onMounted(() => {
-    initWorker()
-  })
-
-  // 组件卸载时清理 Worker 和定时器
-  onUnmounted(() => {
-    if (explorationWorker.value) {
-      explorationWorker.value.terminate()
-    }
-    Object.values(explorationTimers.value).forEach(timer => clearInterval(timer))
-    explorationTimers.value = {}
-    exploringLocations.value = {}
-  })
-
-  // 获取可用地点列表
-  const availableLocations = computed(() => {
-    return locations.filter(loc => playerStore.level >= loc.minLevel)
-  })
-
-  // 显示消息并处理重复
-  const showMessage = (type, content) => {
-    return logRef.value?.addLog(type, content)
+  const stopAutoExploration = (location: ExplorationLocation) => {
+    clearInterval(explorationTimer)
+    explorationTimer = undefined
+    exploringLocations.value[location.id] = false
+    isAutoExploring.value = false
   }
-
-  // 开始自动探索
-  const startAutoExploration = location => {
-    if (exploringLocations.value[location.id] || isAutoExploring.value) return
+  const startAutoExploration = (location: ExplorationLocation) => {
+    if (isAutoExploring.value) return
     isAutoExploring.value = true
-    autoExploringLocationId.value = location.id
     exploringLocations.value[location.id] = true
-    explorationTimers.value[location.id] = setInterval(() => {
-      if (playerStore.spirit >= location.spiritCost) {
-        exploreLocation(location)
-      } else {
+    explorationTimer = setInterval(() => {
+      if (playerStore.spirit >= location.spiritCost) exploreLocation(location)
+      else {
         stopAutoExploration(location)
         showMessage('warning', '灵力不足，自动探索已停止！')
       }
     }, explorationInterval)
   }
-
-  // 停止自动探索
-  const stopAutoExploration = location => {
-    if (explorationTimers.value[location.id]) {
-      clearInterval(explorationTimers.value[location.id])
-      delete explorationTimers.value[location.id]
-    }
-    exploringLocations.value[location.id] = false
-    isAutoExploring.value = false
-    autoExploringLocationId.value = null
-  }
-
-  // 组件卸载时清理所有定时器
   onUnmounted(() => {
-    Object.values(explorationTimers.value).forEach(timer => clearInterval(timer))
-    explorationTimers.value = {}
-    exploringLocations.value = {}
+    explorationWorker.value?.terminate()
+    clearInterval(explorationTimer)
+    playerStore.spirit += pendingCost
   })
-
-  const clearLogPanel = () => {
-    logRef.value?.clearLogs()
-  }
+  const clearLogPanel = () => logRef.value?.clearLogs()
 </script>
 
 <style scoped>

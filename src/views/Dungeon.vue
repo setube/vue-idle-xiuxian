@@ -28,7 +28,7 @@
           <template #header-extra>
             <n-space>
               <n-button type="primary" @click="handleRefreshOptions" :disabled="refreshNumber === 0">
-                刷新增益({{ refreshNumber }})
+                刷新增益(<NumericValue :value="refreshNumber" />)
               </n-button>
             </n-space>
           </template>
@@ -112,83 +112,83 @@
                   <n-divider>基础属性</n-divider>
                   <n-descriptions bordered :column="2">
                     <n-descriptions-item label="生命值">
-                      {{ dungeonState.combatManager.player.currentHealth.toFixed(1) }} /
-                      {{ dungeonState.combatManager.player.stats.maxHealth.toFixed(1) }}
+                      <NumericValue :value="dungeonState.combatManager.player.currentHealth.toFixed(1)" /> /
+                      <NumericValue :value="dungeonState.combatManager.player.stats.maxHealth.toFixed(1)" />
                     </n-descriptions-item>
                     <n-descriptions-item label="攻击力">
-                      {{ dungeonState.combatManager.player.stats.damage.toFixed(1) }}
+                      <NumericValue :value="dungeonState.combatManager.player.stats.damage.toFixed(1)" />
                     </n-descriptions-item>
                     <n-descriptions-item label="防御力">
-                      {{ dungeonState.combatManager.player.stats.defense.toFixed(1) }}
+                      <NumericValue :value="dungeonState.combatManager.player.stats.defense.toFixed(1)" />
                     </n-descriptions-item>
                     <n-descriptions-item label="速度">
-                      {{ dungeonState.combatManager.player.stats.speed.toFixed(1) }}
+                      <NumericValue :value="dungeonState.combatManager.player.stats.speed.toFixed(1)" />
                     </n-descriptions-item>
                   </n-descriptions>
                   <n-divider>战斗属性</n-divider>
                   <n-descriptions bordered :column="3">
                     <n-descriptions-item label="暴击率">
-                      {{ (dungeonState.combatManager.player.stats.critRate * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.player.stats.critRate * 100).toFixed(1)" />%
                     </n-descriptions-item>
                     <n-descriptions-item label="连击率">
-                      {{ (dungeonState.combatManager.player.stats.comboRate * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.player.stats.comboRate * 100).toFixed(1)" />%
                     </n-descriptions-item>
                     <n-descriptions-item label="反击率">
-                      {{ (dungeonState.combatManager.player.stats.counterRate * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.player.stats.counterRate * 100).toFixed(1)" />%
                     </n-descriptions-item>
                     <n-descriptions-item label="眩晕率">
-                      {{ (dungeonState.combatManager.player.stats.stunRate * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.player.stats.stunRate * 100).toFixed(1)" />%
                     </n-descriptions-item>
                     <n-descriptions-item label="闪避率">
-                      {{ (dungeonState.combatManager.player.stats.dodgeRate * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.player.stats.dodgeRate * 100).toFixed(1)" />%
                     </n-descriptions-item>
                     <n-descriptions-item label="吸血率">
-                      {{ (dungeonState.combatManager.player.stats.vampireRate * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.player.stats.vampireRate * 100).toFixed(1)" />%
                     </n-descriptions-item>
                   </n-descriptions>
                   <n-divider>战斗抗性</n-divider>
                   <n-descriptions bordered :column="3">
                     <n-descriptions-item label="抗暴击">
-                      {{ (dungeonState.combatManager.player.stats.critResist * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.player.stats.critResist * 100).toFixed(1)" />%
                     </n-descriptions-item>
                     <n-descriptions-item label="抗连击">
-                      {{ (dungeonState.combatManager.player.stats.comboResist * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.player.stats.comboResist * 100).toFixed(1)" />%
                     </n-descriptions-item>
                     <n-descriptions-item label="抗反击">
-                      {{ (dungeonState.combatManager.player.stats.counterResist * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.player.stats.counterResist * 100).toFixed(1)" />%
                     </n-descriptions-item>
                     <n-descriptions-item label="抗眩晕">
-                      {{ (dungeonState.combatManager.player.stats.stunResist * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.player.stats.stunResist * 100).toFixed(1)" />%
                     </n-descriptions-item>
                     <n-descriptions-item label="抗闪避">
-                      {{ (dungeonState.combatManager.player.stats.dodgeResist * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.player.stats.dodgeResist * 100).toFixed(1)" />%
                     </n-descriptions-item>
                     <n-descriptions-item label="抗吸血">
-                      {{ (dungeonState.combatManager.player.stats.vampireResist * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.player.stats.vampireResist * 100).toFixed(1)" />%
                     </n-descriptions-item>
                   </n-descriptions>
                   <n-divider>特殊属性</n-divider>
                   <n-descriptions bordered :column="4">
                     <n-descriptions-item label="强化治疗">
-                      {{ (dungeonState.combatManager.player.stats.healBoost * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.player.stats.healBoost * 100).toFixed(1)" />%
                     </n-descriptions-item>
                     <n-descriptions-item label="强化爆伤">
-                      {{ (dungeonState.combatManager.player.stats.critDamageBoost * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.player.stats.critDamageBoost * 100).toFixed(1)" />%
                     </n-descriptions-item>
                     <n-descriptions-item label="弱化爆伤">
-                      {{ (dungeonState.combatManager.player.stats.critDamageReduce * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.player.stats.critDamageReduce * 100).toFixed(1)" />%
                     </n-descriptions-item>
                     <n-descriptions-item label="最终增伤">
-                      {{ (dungeonState.combatManager.player.stats.finalDamageBoost * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.player.stats.finalDamageBoost * 100).toFixed(1)" />%
                     </n-descriptions-item>
                     <n-descriptions-item label="最终减伤">
-                      {{ (dungeonState.combatManager.player.stats.finalDamageReduce * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.player.stats.finalDamageReduce * 100).toFixed(1)" />%
                     </n-descriptions-item>
                     <n-descriptions-item label="战斗属性提升">
-                      {{ (dungeonState.combatManager.player.stats.combatBoost * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.player.stats.combatBoost * 100).toFixed(1)" />%
                     </n-descriptions-item>
                     <n-descriptions-item label="战斗抗性提升">
-                      {{ (dungeonState.combatManager.player.stats.resistanceBoost * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.player.stats.resistanceBoost * 100).toFixed(1)" />%
                     </n-descriptions-item>
                   </n-descriptions>
                 </template>
@@ -197,83 +197,83 @@
                   <n-divider>基础属性</n-divider>
                   <n-descriptions bordered :column="2">
                     <n-descriptions-item label="生命值">
-                      {{ dungeonState.combatManager.enemy.currentHealth.toFixed(1) }} /
-                      {{ dungeonState.combatManager.enemy.stats.maxHealth.toFixed(1) }}
+                      <NumericValue :value="dungeonState.combatManager.enemy.currentHealth.toFixed(1)" /> /
+                      <NumericValue :value="dungeonState.combatManager.enemy.stats.maxHealth.toFixed(1)" />
                     </n-descriptions-item>
                     <n-descriptions-item label="攻击力">
-                      {{ dungeonState.combatManager.enemy.stats.damage.toFixed(1) }}
+                      <NumericValue :value="dungeonState.combatManager.enemy.stats.damage.toFixed(1)" />
                     </n-descriptions-item>
                     <n-descriptions-item label="防御力">
-                      {{ dungeonState.combatManager.enemy.stats.defense.toFixed(1) }}
+                      <NumericValue :value="dungeonState.combatManager.enemy.stats.defense.toFixed(1)" />
                     </n-descriptions-item>
                     <n-descriptions-item label="速度">
-                      {{ dungeonState.combatManager.enemy.stats.speed.toFixed(1) }}
+                      <NumericValue :value="dungeonState.combatManager.enemy.stats.speed.toFixed(1)" />
                     </n-descriptions-item>
                   </n-descriptions>
                   <n-divider>战斗属性</n-divider>
                   <n-descriptions bordered :column="3">
                     <n-descriptions-item label="暴击率">
-                      {{ (dungeonState.combatManager.enemy.stats.critRate * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.enemy.stats.critRate * 100).toFixed(1)" />%
                     </n-descriptions-item>
                     <n-descriptions-item label="连击率">
-                      {{ (dungeonState.combatManager.enemy.stats.comboRate * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.enemy.stats.comboRate * 100).toFixed(1)" />%
                     </n-descriptions-item>
                     <n-descriptions-item label="反击率">
-                      {{ (dungeonState.combatManager.enemy.stats.counterRate * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.enemy.stats.counterRate * 100).toFixed(1)" />%
                     </n-descriptions-item>
                     <n-descriptions-item label="眩晕率">
-                      {{ (dungeonState.combatManager.enemy.stats.stunRate * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.enemy.stats.stunRate * 100).toFixed(1)" />%
                     </n-descriptions-item>
                     <n-descriptions-item label="闪避率">
-                      {{ (dungeonState.combatManager.enemy.stats.dodgeRate * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.enemy.stats.dodgeRate * 100).toFixed(1)" />%
                     </n-descriptions-item>
                     <n-descriptions-item label="吸血率">
-                      {{ (dungeonState.combatManager.enemy.stats.vampireRate * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.enemy.stats.vampireRate * 100).toFixed(1)" />%
                     </n-descriptions-item>
                   </n-descriptions>
                   <n-divider>战斗抗性</n-divider>
                   <n-descriptions bordered :column="3">
                     <n-descriptions-item label="抗暴击">
-                      {{ (dungeonState.combatManager.enemy.stats.critResist * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.enemy.stats.critResist * 100).toFixed(1)" />%
                     </n-descriptions-item>
                     <n-descriptions-item label="抗连击">
-                      {{ (dungeonState.combatManager.enemy.stats.comboResist * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.enemy.stats.comboResist * 100).toFixed(1)" />%
                     </n-descriptions-item>
                     <n-descriptions-item label="抗反击">
-                      {{ (dungeonState.combatManager.enemy.stats.counterResist * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.enemy.stats.counterResist * 100).toFixed(1)" />%
                     </n-descriptions-item>
                     <n-descriptions-item label="抗眩晕">
-                      {{ (dungeonState.combatManager.enemy.stats.stunResist * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.enemy.stats.stunResist * 100).toFixed(1)" />%
                     </n-descriptions-item>
                     <n-descriptions-item label="抗闪避">
-                      {{ (dungeonState.combatManager.enemy.stats.dodgeResist * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.enemy.stats.dodgeResist * 100).toFixed(1)" />%
                     </n-descriptions-item>
                     <n-descriptions-item label="抗吸血">
-                      {{ (dungeonState.combatManager.enemy.stats.vampireResist * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.enemy.stats.vampireResist * 100).toFixed(1)" />%
                     </n-descriptions-item>
                   </n-descriptions>
                   <n-divider>特殊属性</n-divider>
                   <n-descriptions bordered :column="3">
                     <n-descriptions-item label="强化治疗">
-                      {{ (dungeonState.combatManager.enemy.stats.healBoost * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.enemy.stats.healBoost * 100).toFixed(1)" />%
                     </n-descriptions-item>
                     <n-descriptions-item label="强化爆伤">
-                      {{ (dungeonState.combatManager.enemy.stats.critDamageBoost * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.enemy.stats.critDamageBoost * 100).toFixed(1)" />%
                     </n-descriptions-item>
                     <n-descriptions-item label="弱化爆伤">
-                      {{ (dungeonState.combatManager.enemy.stats.critDamageReduce * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.enemy.stats.critDamageReduce * 100).toFixed(1)" />%
                     </n-descriptions-item>
                     <n-descriptions-item label="最终增伤">
-                      {{ (dungeonState.combatManager.enemy.stats.finalDamageBoost * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.enemy.stats.finalDamageBoost * 100).toFixed(1)" />%
                     </n-descriptions-item>
                     <n-descriptions-item label="最终减伤">
-                      {{ (dungeonState.combatManager.enemy.stats.finalDamageReduce * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.enemy.stats.finalDamageReduce * 100).toFixed(1)" />%
                     </n-descriptions-item>
                     <n-descriptions-item label="战斗属性提升">
-                      {{ (dungeonState.combatManager.enemy.stats.combatBoost * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.enemy.stats.combatBoost * 100).toFixed(1)" />%
                     </n-descriptions-item>
                     <n-descriptions-item label="战斗抗性提升">
-                      {{ (dungeonState.combatManager.enemy.stats.resistanceBoost * 100).toFixed(1) }}%
+                      <NumericValue :value="(dungeonState.combatManager.enemy.stats.resistanceBoost * 100).toFixed(1)" />%
                     </n-descriptions-item>
                   </n-descriptions>
                 </template>
@@ -288,11 +288,15 @@
   </div>
 </template>
 
-<script setup>
-  import { ref } from 'vue'
+<script setup lang="ts">
+  import NumericValue from '../components/NumericValue.vue'
+
+  import { ref, onUnmounted } from 'vue'
+  import type { DungeonOption, DungeonOptionQuality } from '../plugins/dungeon'
   import { usePlayerStore } from '../stores/player'
   import { getRealmName } from '../plugins/realm'
   import { CombatManager, CombatEntity, generateEnemy, CombatType } from '../plugins/combat'
+  import type { LogEntry } from '../types/game'
   import { getRandomOptions } from '../plugins/dungeon'
   import dungeonBuffs from '../plugins/dungeonBuffs'
   import { useMessage } from 'naive-ui'
@@ -300,13 +304,13 @@
 
   const playerStore = usePlayerStore()
   const message = useMessage()
-  const logRef = ref(null)
+  const logRef = ref<InstanceType<typeof LogPanel> | null>(null)
   const playerAttacking = ref(false)
   const playerHurt = ref(false)
   const enemyAttacking = ref(false)
   const enemyHurt = ref(false)
   const infoShow = ref(false)
-  const infoType = ref('')
+  const infoType = ref<'player' | 'enemy' | ''>('')
 
   const floorData = computed(() => {
     switch (playerStore.dungeonDifficulty) {
@@ -326,7 +330,7 @@
   })
 
   // 副本状态
-  const dungeonState = ref({
+  const dungeonState = ref<{floor:number; inCombat:boolean; showingOptions:boolean; currentOptions:DungeonOption[]; combatManager:CombatManager|null}>({
     floor: floorData.value,
     inCombat: false,
     showingOptions: false,
@@ -335,60 +339,50 @@
   })
 
   // 当前战斗日志
-  const combatLog = ref([])
+  const combatLog = ref<LogEntry[]>([])
+  let mounted = true
+  let animationTimer: ReturnType<typeof setTimeout> | undefined
+  const optionColors: Record<DungeonOptionQuality, { name: string; color: string }> = { epic: { name: '史诗', color: '#e91e63' }, rare: { name: '稀有', color: '#2196f3' }, common: { name: '普通', color: '#4caf50' } }
 
   // 根据选项类型获取颜色
-  const getOptionColor = type => {
-    const types = {
-      epic: {
-        name: '史诗',
-        color: '#e91e63'
-      },
-      rare: {
-        name: '稀有',
-        color: '#2196f3'
-      },
-      common: {
-        name: '普通',
-        color: '#4caf50'
-      }
-    }
-    return types[type]
+  const getOptionColor = (type: DungeonOptionQuality | undefined) => {
+    return optionColors[type ?? 'common']
   }
 
   // 创建玩家战斗实体
   const createPlayerEntity = () => {
     // 基础属性
     const baseStats = {
-      health: playerStore.baseAttributes.health,
-      damage: playerStore.baseAttributes.attack,
-      defense: playerStore.baseAttributes.defense,
-      speed: playerStore.baseAttributes.speed,
+      health: playerStore.effectiveBaseAttributes.health,
+      damage: playerStore.effectiveBaseAttributes.attack,
+      defense: playerStore.effectiveBaseAttributes.defense,
+      speed: playerStore.effectiveBaseAttributes.speed,
       // 战斗属性
-      critRate: playerStore.combatAttributes.critRate,
-      comboRate: playerStore.combatAttributes.comboRate,
-      counterRate: playerStore.combatAttributes.counterRate,
-      stunRate: playerStore.combatAttributes.stunRate,
-      dodgeRate: playerStore.combatAttributes.dodgeRate,
-      vampireRate: playerStore.combatAttributes.vampireRate,
+      critRate: playerStore.effectiveCombatAttributes.critRate,
+      comboRate: playerStore.effectiveCombatAttributes.comboRate,
+      counterRate: playerStore.effectiveCombatAttributes.counterRate,
+      stunRate: playerStore.effectiveCombatAttributes.stunRate,
+      dodgeRate: playerStore.effectiveCombatAttributes.dodgeRate,
+      vampireRate: playerStore.effectiveCombatAttributes.vampireRate,
       // 战斗抗性
-      critResist: playerStore.combatResistance.critResist,
-      comboResist: playerStore.combatResistance.comboResist,
-      counterResist: playerStore.combatResistance.counterResist,
-      stunResist: playerStore.combatResistance.stunResist,
-      dodgeResist: playerStore.combatResistance.dodgeResist,
-      vampireResist: playerStore.combatResistance.vampireResist,
+      critResist: playerStore.effectiveCombatResistance.critResist,
+      comboResist: playerStore.effectiveCombatResistance.comboResist,
+      counterResist: playerStore.effectiveCombatResistance.counterResist,
+      stunResist: playerStore.effectiveCombatResistance.stunResist,
+      dodgeResist: playerStore.effectiveCombatResistance.dodgeResist,
+      vampireResist: playerStore.effectiveCombatResistance.vampireResist,
       // 特殊属性
-      healBoost: playerStore.specialAttributes.healBoost,
-      critDamageBoost: playerStore.specialAttributes.critDamageBoost,
-      critDamageReduce: playerStore.specialAttributes.critDamageReduce,
-      finalDamageBoost: playerStore.specialAttributes.finalDamageBoost,
-      finalDamageReduce: playerStore.specialAttributes.finalDamageReduce,
-      combatBoost: playerStore.specialAttributes.combatBoost,
-      resistanceBoost: playerStore.specialAttributes.resistanceBoost,
+      healBoost: playerStore.effectiveSpecialAttributes.healBoost,
+      critDamageBoost: playerStore.effectiveSpecialAttributes.critDamageBoost,
+      critDamageReduce: playerStore.effectiveSpecialAttributes.critDamageReduce,
+      finalDamageBoost: playerStore.effectiveSpecialAttributes.finalDamageBoost,
+      finalDamageReduce: playerStore.effectiveSpecialAttributes.finalDamageReduce,
+      combatBoost: playerStore.effectiveSpecialAttributes.combatBoost,
+      resistanceBoost: playerStore.effectiveSpecialAttributes.resistanceBoost,
       // 其他属性
       spiritDamage: playerStore.spirit * 0.1,
-      maxHealth: playerStore.baseAttributes.health
+      maxHealth: playerStore.effectiveBaseAttributes.health
+      , autoHeal: playerStore.effectBonuses.autoHeal
     }
     const entity = new CombatEntity(playerStore.name, playerStore.level, baseStats, playerStore.realm)
     // 应用所有激活的增益效果
@@ -440,7 +434,7 @@
   }
 
   // 选择选项
-  const selectOption = option => {
+  const selectOption = (option: DungeonOption) => {
     dungeonBuffs.apply(playerStore, option)
     message.success(`选择了：${option.name}`)
     dungeonState.value.showingOptions = false
@@ -488,40 +482,43 @@
     // 创建敌人
     const enemy = generateEnemy(floor, enemyType, playerStore.dungeonDifficulty)
     // 创建战斗管理器
-    dungeonState.value.combatManager = new CombatManager(playerEntity, enemy, log => {
-      if (logRef.value) {
-        logRef.value.addLog(log)
-      }
-    })
+    const combatManager = new CombatManager(playerEntity, enemy)
+    dungeonState.value.combatManager = combatManager
     dungeonState.value.inCombat = true
-    dungeonState.value.combatManager.start() // 初始化战斗状态
-    autoCombat() // 开始自动战斗
+    combatManager.start() // 初始化战斗状态
+    void autoCombat(combatManager) // 开始自动战斗
   }
 
   // 自动战斗
-  const autoCombat = async () => {
-    while (dungeonState.value.inCombat) {
-      const result = dungeonState.value.combatManager.executeTurn()
-      const getCombatLog = dungeonState.value.combatManager.getCombatLog()
+  const pause = (ms: number) => new Promise<void>(resolve => {
+    animationTimer = setTimeout(() => { animationTimer = undefined; resolve() }, ms)
+  })
+  const autoCombat = async (combatManager: CombatManager) => {
+    let displayedLogs = 0
+    while (mounted && dungeonState.value.inCombat && dungeonState.value.combatManager === combatManager) {
+      const result = combatManager.executeTurn()
+      if (!result) break
+      const getCombatLog = combatManager.getCombatLog()
+      getCombatLog.slice(displayedLogs).forEach(item => logRef.value?.addLog('info', item))
+      displayedLogs = getCombatLog.length
       // 添加动画效果
-      if (result.attacker === dungeonState.value.combatManager.player) {
+      if (combatManager.player.stats.speed * (1 + combatManager.player.stats.combatBoost) >=
+        combatManager.enemy.stats.speed * (1 + combatManager.enemy.stats.combatBoost)) {
         playerAttacking.value = true
         enemyHurt.value = true
-        await new Promise(resolve => setTimeout(resolve, 500))
+        await pause(500)
+        if (!mounted || dungeonState.value.combatManager !== combatManager) return
         playerAttacking.value = false
         enemyHurt.value = false
       } else {
         enemyAttacking.value = true
         playerHurt.value = true
-        await new Promise(resolve => setTimeout(resolve, 500))
+        await pause(500)
+        if (!mounted || dungeonState.value.combatManager !== combatManager) return
         enemyAttacking.value = false
         playerHurt.value = false
       }
-      if (!result) break
       // 更新战斗日志
-      getCombatLog.forEach(item => {
-        logRef.value?.addLog('info', item)
-      })
       // 检查战斗是否结束
       if (result.state === 'victory') {
         handleVictory()
@@ -531,7 +528,7 @@
         break
       }
       // 添加延迟使战斗动画更流畅
-      await new Promise(resolve => setTimeout(resolve, 500))
+      await pause(500)
     }
   }
 
@@ -576,7 +573,7 @@
     return rewards
   }
 
-  const infoCliclk = type => {
+  const infoCliclk = (type: 'player' | 'enemy') => {
     infoShow.value = true
     infoType.value = type
   }
@@ -604,7 +601,7 @@
     }
   ]
 
-  const handleUpdateValue = (value, option) => {
+  const handleUpdateValue = (value: number) => {
     if (value === 100) {
       message.warning('警告! 通天难度挑战失败后会跌落境界')
     }
@@ -612,9 +609,16 @@
   const refreshNumber = ref(3)
   // 刷新选择
   const handleRefreshOptions = () => {
+    if (refreshNumber.value <= 0) return
     showOptions()
     refreshNumber.value--
   }
+  onUnmounted(() => {
+    mounted = false
+    if (animationTimer) clearTimeout(animationTimer)
+    dungeonState.value.inCombat = false
+    dungeonBuffs.clear(playerStore)
+  })
 </script>
 
 <style scoped>

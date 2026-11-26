@@ -51,9 +51,10 @@
   </n-layout>
 </template>
 
-<script setup>
+<script setup lang="ts">
   import { usePlayerStore } from '../stores/player'
   import { achievements, getAchievementProgress } from '../plugins/achievements'
+  import type { Achievement } from '../plugins/achievements'
   import { ref, onMounted } from 'vue'
   import { useMessage } from 'naive-ui'
   import { checkAchievements } from '../plugins/achievements'
@@ -72,14 +73,14 @@
 
   // 获取所有成就类别
   const achievementCategories = Object.entries(achievements).map(([key, value]) => ({
-    key,
+    key: key,
     name: getCategoryName(key),
     achievements: value
   }))
 
   // 获取成就类别名称
-  const getCategoryName = category => {
-    const categoryNames = {
+  const getCategoryName = (category: string): string => {
+    const categoryNames: Record<string, string> = {
       equipment: '装备成就',
       dungeon_explore: '秘境探索',
       dungeon_combat: '秘境战斗',
@@ -94,12 +95,12 @@
   }
 
   // 检查成就是否完成
-  const isAchievementCompleted = achievementId => {
+  const isAchievementCompleted = (achievementId: string): boolean => {
     return playerStore.completedAchievements.includes(achievementId)
   }
 
   // 显示成就详情
-  const showAchievementDetails = achievement => {
+  const showAchievementDetails = (achievement: Achievement): void => {
     let rewardText = '奖励：'
     if (achievement.reward) {
       if (achievement.reward.spirit) rewardText += `\n${achievement.reward.spirit} 灵力`
@@ -115,7 +116,7 @@
   }
 
   // 获取成就进度
-  const getProgress = achievement => {
+  const getProgress = (achievement: Achievement): number => {
     try {
       const progress = getAchievementProgress(playerStore, achievement)
       return Number.isFinite(progress) ? Math.min(100, Math.max(0, Math.round(progress))) : 0

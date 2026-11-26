@@ -1,6 +1,6 @@
 <template>
   <n-divider>{{ title }}</n-divider>
-  <n-card class="log-panel" :style="$attrs.style">
+  <n-card class="log-panel" >
     <n-space justify="end" style="margin-bottom: 8px;">
       <n-button size="small" @click="clearLogs" type="error" secondary>清空日志</n-button>
     </n-space>
@@ -22,86 +22,56 @@
   </n-card>
 </template>
 
-<script setup>
-  import { ref, onMounted, onUnmounted, watch } from 'vue'
+<script setup lang="ts">
+  import { ref, shallowRef, onMounted, onUnmounted, watch, nextTick } from 'vue'
+  import type { ScrollbarInst } from 'naive-ui'
+  import type { LogEntry, MessageType } from '../types/game'
 
-  const props = defineProps({
-    title: {
-      type: String,
-      default: '系统日志'
-    },
-    messages: {
-      type: Array,
-      default: () => []
-    }
+  const props = withDefaults(defineProps<{ title?: string; messages?: LogEntry[] }>(), {
+    title: '系统日志',
+    messages: () => []
   })
+  const logs = ref<LogEntry[]>([])
+  const scrollRef = ref<ScrollbarInst | null>(null)
+  const logWorker = shallowRef<Worker | null>(null)
+  let scrollScheduled = false
+  let mounted = true
 
-  // 日志数组和滚动引用
-  const logs = ref([])
-  const scrollRef = ref(null)
+  const scrollToLatest = async () => {
+    if (scrollScheduled) return
+    scrollScheduled = true
+    await nextTick()
+    if (mounted) scrollRef.value?.scrollTo({ top: 99999 })
+    scrollScheduled = false
+  }
 
-  // 创建Web Worker实例
-  const logWorker = ref(null)
-
-  // 初始化Web Worker
   onMounted(() => {
-    logWorker.value = new Worker(new URL('../workers/log.js', import.meta.url), { type: 'module' })
-
-    // 监听Worker消息
-    logWorker.value.onmessage = e => {
-      if (e.data.type === 'LOGS_UPDATED') {
-        logs.value = e.data.logs
-        // 下一帧滚动到底部
-        setTimeout(() => {
-          if (scrollRef.value) {
-            scrollRef.value.scrollTo({ top: 99999, behavior: 'smooth' })
-          }
-        })
-      }
+    logWorker.value = new Worker(new URL('../workers/log.ts', import.meta.url), { type: 'module' })
+    logWorker.value.onmessage = (event: MessageEvent<{ type: string; logs: LogEntry[] }>) => {
+      if (event.data.type !== 'LOGS_UPDATED') return
+      logs.value = event.data.logs
+      void scrollToLatest()
     }
+    props.messages.forEach(log => addLog(log.type, log.content))
   })
 
-  // 组件卸载时清理Worker
   onUnmounted(() => {
-    if (logWorker.value) {
-      logWorker.value.terminate()
-    }
+    mounted = false
+    logWorker.value?.terminate()
+    logWorker.value = null
   })
 
-  // 添加日志的方法
-  const addLog = (type, content) => {
-    if (logWorker.value) {
-      logWorker.value.postMessage({
-        type: 'ADD_LOG',
-        data: { type, content }
-      })
-    }
+  const addLog = (type: MessageType, content: string) => {
+    logWorker.value?.postMessage({ type: 'ADD_LOG', data: { type, content } })
   }
-
-  // 添加清空日志方法
   const clearLogs = () => {
-    if (logWorker.value) {
-      logWorker.value.postMessage({ type: 'CLEAR_LOGS' })
-    }
+    logWorker.value?.postMessage({ type: 'CLEAR_LOGS' })
   }
-
-  // 优化滚动逻辑：只在 logs 数量变化时滚动
-  watch(
-    () => logs.value.length,
-    () => {
-      setTimeout(() => {
-        if (scrollRef.value) {
-          scrollRef.value.scrollTo({ top: 99999, behavior: 'smooth' })
-        }
-      })
-    }
-  )
-
-  // 暴露方法
-  defineExpose({
-    addLog,
-    clearLogs
+  watch(() => props.messages, messages => {
+    clearLogs()
+    messages.forEach(log => addLog(log.type, log.content))
   })
+  defineExpose({ addLog, clearLogs })
 </script>
 
 <style scoped>

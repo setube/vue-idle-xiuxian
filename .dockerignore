@@ -4,3 +4,6 @@ dist
 .gitignore
 Dockerfile
 docker-compose.yml
+dist
+release-artifacts
+docs

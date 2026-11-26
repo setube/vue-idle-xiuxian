@@ -41,16 +41,16 @@
                         {{ getRealmName(playerStore.level).name }}
                       </n-descriptions-item>
                       <n-descriptions-item label="修为">
-                        {{ playerStore.cultivation }} / {{ playerStore.maxCultivation }}
+                        <NumericValue :value="playerStore.cultivation" /> / <NumericValue :value="playerStore.maxCultivation" />
                       </n-descriptions-item>
                       <n-descriptions-item label="灵力">
-                        {{ playerStore.spirit.toFixed(2) }}
+                        <NumericValue :value="playerStore.spirit.toFixed(2)" />
                       </n-descriptions-item>
                       <n-descriptions-item label="灵石">
-                        {{ playerStore.spiritStones }}
+                        <NumericValue :value="playerStore.spiritStones" />
                       </n-descriptions-item>
                       <n-descriptions-item label="强化石">
-                        {{ playerStore.reinforceStones }}
+                        <NumericValue :value="playerStore.reinforceStones" />
                       </n-descriptions-item>
                     </n-descriptions>
                     <n-collapse>
@@ -58,82 +58,82 @@
                         <n-divider>基础属性</n-divider>
                         <n-descriptions bordered :column="2">
                           <n-descriptions-item label="生命值">
-                            {{ (playerStore.baseAttributes.health || 0).toFixed(0) }}
+                            <NumericValue :value="(playerStore.effectiveBaseAttributes.health || 0).toFixed(0)" />
                           </n-descriptions-item>
                           <n-descriptions-item label="攻击力">
-                            {{ (playerStore.baseAttributes.attack || 0).toFixed(0) }}
+                            <NumericValue :value="(playerStore.effectiveBaseAttributes.attack || 0).toFixed(0)" />
                           </n-descriptions-item>
                           <n-descriptions-item label="防御力">
-                            {{ (playerStore.baseAttributes.defense || 0).toFixed(0) }}
+                            <NumericValue :value="(playerStore.effectiveBaseAttributes.defense || 0).toFixed(0)" />
                           </n-descriptions-item>
                           <n-descriptions-item label="速度">
-                            {{ (playerStore.baseAttributes.speed || 0).toFixed(0) }}
+                            <NumericValue :value="(playerStore.effectiveBaseAttributes.speed || 0).toFixed(0)" />
                           </n-descriptions-item>
                         </n-descriptions>
                         <n-divider>战斗属性</n-divider>
                         <n-descriptions bordered :column="3">
                           <n-descriptions-item label="暴击率">
-                            {{ (playerStore.combatAttributes.critRate * 100).toFixed(1) }}%
+                            <NumericValue :value="(playerStore.effectiveCombatAttributes.critRate * 100).toFixed(1)" />%
                           </n-descriptions-item>
                           <n-descriptions-item label="连击率">
-                            {{ (playerStore.combatAttributes.comboRate * 100).toFixed(1) }}%
+                            <NumericValue :value="(playerStore.effectiveCombatAttributes.comboRate * 100).toFixed(1)" />%
                           </n-descriptions-item>
                           <n-descriptions-item label="反击率">
-                            {{ (playerStore.combatAttributes.counterRate * 100).toFixed(1) }}%
+                            <NumericValue :value="(playerStore.effectiveCombatAttributes.counterRate * 100).toFixed(1)" />%
                           </n-descriptions-item>
                           <n-descriptions-item label="眩晕率">
-                            {{ (playerStore.combatAttributes.stunRate * 100).toFixed(1) }}%
+                            <NumericValue :value="(playerStore.effectiveCombatAttributes.stunRate * 100).toFixed(1)" />%
                           </n-descriptions-item>
                           <n-descriptions-item label="闪避率">
-                            {{ (playerStore.combatAttributes.dodgeRate * 100).toFixed(1) }}%
+                            <NumericValue :value="(playerStore.effectiveCombatAttributes.dodgeRate * 100).toFixed(1)" />%
                           </n-descriptions-item>
                           <n-descriptions-item label="吸血率">
-                            {{ (playerStore.combatAttributes.vampireRate * 100).toFixed(1) }}%
+                            <NumericValue :value="(playerStore.effectiveCombatAttributes.vampireRate * 100).toFixed(1)" />%
                           </n-descriptions-item>
                         </n-descriptions>
                         <n-divider>战斗抗性</n-divider>
                         <n-descriptions bordered :column="3">
                           <n-descriptions-item label="抗暴击">
-                            {{ (playerStore.combatResistance.critResist * 100 || 0).toFixed(1) }}%
+                            <NumericValue :value="(playerStore.effectiveCombatResistance.critResist * 100 || 0).toFixed(1)" />%
                           </n-descriptions-item>
                           <n-descriptions-item label="抗连击">
-                            {{ (playerStore.combatResistance.comboResist * 100 || 0).toFixed(1) }}%
+                            <NumericValue :value="(playerStore.effectiveCombatResistance.comboResist * 100 || 0).toFixed(1)" />%
                           </n-descriptions-item>
                           <n-descriptions-item label="抗反击">
-                            {{ (playerStore.combatResistance.counterResist * 100 || 0).toFixed(1) }}%
+                            <NumericValue :value="(playerStore.effectiveCombatResistance.counterResist * 100 || 0).toFixed(1)" />%
                           </n-descriptions-item>
                           <n-descriptions-item label="抗眩晕">
-                            {{ (playerStore.combatResistance.stunResist * 100 || 0).toFixed(1) }}%
+                            <NumericValue :value="(playerStore.effectiveCombatResistance.stunResist * 100 || 0).toFixed(1)" />%
                           </n-descriptions-item>
                           <n-descriptions-item label="抗闪避">
-                            {{ (playerStore.combatResistance.dodgeResist * 100 || 0).toFixed(1) }}%
+                            <NumericValue :value="(playerStore.effectiveCombatResistance.dodgeResist * 100 || 0).toFixed(1)" />%
                           </n-descriptions-item>
                           <n-descriptions-item label="抗吸血">
-                            {{ (playerStore.combatResistance.vampireResist * 100 || 0).toFixed(1) }}%
+                            <NumericValue :value="(playerStore.effectiveCombatResistance.vampireResist * 100 || 0).toFixed(1)" />%
                           </n-descriptions-item>
                         </n-descriptions>
                         <n-divider>特殊属性</n-divider>
                         <n-descriptions bordered :column="4">
                           <n-descriptions-item label="强化治疗">
-                            {{ (playerStore.specialAttributes.healBoost * 100 || 0).toFixed(1) }}%
+                            <NumericValue :value="(playerStore.effectiveSpecialAttributes.healBoost * 100 || 0).toFixed(1)" />%
                           </n-descriptions-item>
                           <n-descriptions-item label="强化爆伤">
-                            {{ (playerStore.specialAttributes.critDamageBoost * 100 || 0).toFixed(1) }}%
+                            <NumericValue :value="(playerStore.effectiveSpecialAttributes.critDamageBoost * 100 || 0).toFixed(1)" />%
                           </n-descriptions-item>
                           <n-descriptions-item label="弱化爆伤">
-                            {{ (playerStore.specialAttributes.critDamageReduce * 100 || 0).toFixed(1) }}%
+                            <NumericValue :value="(playerStore.effectiveSpecialAttributes.critDamageReduce * 100 || 0).toFixed(1)" />%
                           </n-descriptions-item>
                           <n-descriptions-item label="最终增伤">
-                            {{ (playerStore.specialAttributes.finalDamageBoost * 100 || 0).toFixed(1) }}%
+                            <NumericValue :value="(playerStore.effectiveSpecialAttributes.finalDamageBoost * 100 || 0).toFixed(1)" />%
                           </n-descriptions-item>
                           <n-descriptions-item label="最终减伤">
-                            {{ (playerStore.specialAttributes.finalDamageReduce * 100 || 0).toFixed(1) }}%
+                            <NumericValue :value="(playerStore.effectiveSpecialAttributes.finalDamageReduce * 100 || 0).toFixed(1)" />%
                           </n-descriptions-item>
                           <n-descriptions-item label="战斗属性提升">
-                            {{ (playerStore.specialAttributes.combatBoost * 100 || 0).toFixed(1) }}%
+                            <NumericValue :value="(playerStore.effectiveSpecialAttributes.combatBoost * 100 || 0).toFixed(1)" />%
                           </n-descriptions-item>
                           <n-descriptions-item label="战斗抗性提升">
-                            {{ (playerStore.specialAttributes.resistanceBoost * 100 || 0).toFixed(1) }}%
+                            <NumericValue :value="(playerStore.effectiveSpecialAttributes.resistanceBoost * 100 || 0).toFixed(1)" />%
                           </n-descriptions-item>
                         </n-descriptions>
                       </n-collapse-item>
@@ -160,11 +160,13 @@
   </n-config-provider>
 </template>
 
-<script setup>
+<script setup lang="ts">
+  import NumericValue from './components/NumericValue.vue'
+
   import { useRouter, useRoute } from 'vue-router'
   import { usePlayerStore } from './stores/player'
-  import { h, ref } from 'vue'
-  import { NIcon, darkTheme } from 'naive-ui'
+  import { h, ref, shallowRef, watch, onMounted, onUnmounted, type Component } from 'vue'
+  import { NIcon, darkTheme, type MenuOption } from 'naive-ui'
   import {
     BookOutlined,
     ExperimentOutlined,
@@ -184,15 +186,19 @@
   const router = useRouter()
   const route = useRoute()
   const playerStore = usePlayerStore()
-  const spiritWorker = ref(null)
-  const menuOptions = ref([])
+  const spiritWorker = shallowRef<Worker | null>(null)
+  const menuOptions = ref<MenuOption[]>([])
   const isNewPlayer = ref(false)
   const isLoading = ref(true) // 添加加载状态
 
   // 初始化数据加载
   playerStore.initializePlayer().then(() => {
+    isNewPlayer.value = playerStore.isNewPlayer
     isLoading.value = false
     getMenuOptions()
+  }).catch(error => {
+    console.error('游戏数据加载失败', error)
+    isLoading.value = false
   })
 
   // 监听玩家状态
@@ -200,6 +206,7 @@
     () => playerStore.isNewPlayer,
     bool => {
       isNewPlayer.value = bool
+      getMenuOptions()
       if (!bool && route.path === '/') {
         router.push('/cultivation')
       }
@@ -211,7 +218,6 @@
 
   const getMenuOptions = () => {
     menuOptions.value = [
-      ,
       ...(isNewPlayer.value
         ? [
             {
@@ -275,7 +281,7 @@
   // 自动获取灵力
   const startAutoGain = () => {
     if (spiritWorker.value) return
-    spiritWorker.value = new Worker(new URL('./workers/spirit.js', import.meta.url))
+    spiritWorker.value = new Worker(new URL('./workers/spirit.ts', import.meta.url), { type: 'module' })
     spiritWorker.value.onmessage = e => {
       if (e.data.type === 'gain') {
         playerStore.totalCultivationTime += 1
@@ -289,8 +295,14 @@
     startAutoGain() // 启动自动获取灵力
   })
 
+  onUnmounted(() => {
+    spiritWorker.value?.terminate()
+    spiritWorker.value = null
+    void playerStore.saveData()
+  })
+
   // 图标
-  const renderIcon = icon => {
+  const renderIcon = (icon: Component) => {
     return () => h(NIcon, null, { default: () => h(icon) })
   }
 
@@ -301,7 +313,7 @@
   }
 
   // 菜单点击事件
-  const handleMenuClick = key => {
+  const handleMenuClick = (key: string) => {
     router.push(`/${key}`)
   }
 </script>

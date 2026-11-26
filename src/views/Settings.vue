@@ -33,11 +33,12 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
   import { usePlayerStore } from '../stores/player'
   import { ref } from 'vue'
   import { useDialog, useMessage } from 'naive-ui'
   import { saveAs } from 'file-saver'
+  import type { UploadFileInfo } from 'naive-ui'
 
   const clickCount = ref(0)
   const newName = ref('')
@@ -61,24 +62,30 @@
         `我的放置仙途${version}版本存档数据-${new Date().toISOString().slice(0, 10)}-${Date.now()}.json`
       )
       message.success('存档导出成功！')
-    } catch (error) {
-      message.error('导出失败：' + error.message)
+    } catch (error: unknown) {
+      message.error('导出失败：' + (error instanceof Error ? error.message : String(error)))
     }
   }
 
   // 导入存档
-  const handleImportSave = data => {
+  const handleImportSave = ({ file }: { file: UploadFileInfo }): void => {
+    if (!(file.file instanceof File)) {
+      message.error('无法读取所选的存档文件')
+      return
+    }
     const reader = new FileReader()
     reader.onload = async e => {
       try {
-        const encryptedData = e.target.result
+        const encryptedData = e.target?.result
+        if (typeof encryptedData !== 'string') throw new Error('存档文件格式无效')
         await playerStore.importData(encryptedData)
         message.success('存档导入成功！')
-      } catch (error) {
-        message.error('导入失败：' + error.message)
+      } catch (error: unknown) {
+        message.error('导入失败：' + (error instanceof Error ? error.message : String(error)))
       }
     }
-    reader.readAsText(data.file.file)
+    reader.onerror = () => message.error('读取存档文件失败')
+    reader.readAsText(file.file)
   }
 
   // 转世重修确认

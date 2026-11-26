@@ -11,7 +11,7 @@
       </n-alert>
       <n-space vertical>
         <n-button type="primary" size="large" block @click="cultivate" :disabled="playerStore.spirit < cultivationCost">
-          打坐修炼 (消耗 {{ cultivationCost }} 灵力)
+          打坐修炼 (消耗 <NumericValue :value="cultivationCost" /> 灵力)
         </n-button>
         <n-button :type="isAutoCultivating ? 'warning' : 'success'" size="large" block @click="toggleAutoCultivation">
           {{ isAutoCultivating ? '停止自动修炼' : '开始自动修炼' }}
@@ -28,10 +28,10 @@
       </n-space>
       <n-divider>修炼详情</n-divider>
       <n-descriptions bordered>
-        <n-descriptions-item label="灵力获取速率">{{ baseGainRate * playerStore.spiritRate }} / 秒</n-descriptions-item>
-        <n-descriptions-item label="修炼效率">{{ cultivationGain }} 修为 / 次</n-descriptions-item>
+        <n-descriptions-item label="灵力获取速率"><NumericValue :value="baseGainRate * playerStore.spiritRate" /> / 秒</n-descriptions-item>
+        <n-descriptions-item label="修炼效率"><NumericValue :value="cultivationGain" /> 修为 / 次</n-descriptions-item>
         <n-descriptions-item label="突破所需修为">
-          {{ playerStore.maxCultivation }}
+          <NumericValue :value="playerStore.maxCultivation" />
         </n-descriptions-item>
       </n-descriptions>
       <log-panel ref="logRef" title="修炼日志" />
@@ -39,32 +39,30 @@
   </n-card>
 </template>
 
-<script setup>
+<script setup lang="ts">
+  import NumericValue from '../components/NumericValue.vue'
+
   import { usePlayerStore } from '../stores/player'
-  import { ref, onUnmounted } from 'vue'
+  import { ref, computed, onUnmounted } from 'vue'
+  import type { MessageType } from '../types/game'
+  import { getCultivationCost, getCultivationGain } from '../utils/cultivation'
   import { NIcon } from 'naive-ui'
   import { BookOutline } from '@vicons/ionicons5'
   import LogPanel from '../components/LogPanel.vue'
 
   const playerStore = usePlayerStore()
-  const logRef = ref(null)
+  const logRef = ref<InstanceType<typeof LogPanel> | null>(null)
 
   // 修炼相关数值
   const baseGainRate = 1 // 基础灵力获取率
-  const baseCultivationCost = 10 // 基础修炼消耗的灵力
-  const baseCultivationGain = 1 // 基础修炼获得的修为
   const autoGainInterval = 1000 // 自动获取灵力的间隔（毫秒）
   const extraCultivationChance = 0.3 // 获得额外修为的基础概率
 
   // 计算当前境界的修炼消耗
-  const getCurrentCultivationCost = () => {
-    return Math.floor(baseCultivationCost * Math.pow(1.5, playerStore.level - 1))
-  }
+  const getCurrentCultivationCost = () => getCultivationCost(playerStore.level)
 
   // 计算当前境界的修炼获得
-  const getCurrentCultivationGain = () => {
-    return Math.floor(baseCultivationGain * Math.pow(1.2, playerStore.level - 1))
-  }
+  const getCurrentCultivationGain = () => getCultivationGain(playerStore.level, playerStore.effectiveCultivationRate)
 
   // 计算当前修炼消耗（作为计算属性）
   const cultivationCost = computed(() => {
@@ -87,10 +85,11 @@
 
   // 自动修炼状态
   const isAutoCultivating = ref(false)
-  const cultivationTimer = ref(null)
+  let cultivationTimer: ReturnType<typeof setInterval> | undefined
+  const isCalculating = ref(false)
 
   // 显示消息并处理重复
-  const showMessage = (type, content) => {
+  const showMessage = (type: MessageType, content: string) => {
     return logRef.value?.addLog(type, content)
   }
 
@@ -111,10 +110,11 @@
   }
 
   // 修炼Worker
-  const cultivationWorker = new Worker(new URL('../workers/cultivation.js', import.meta.url), { type: 'module' })
+  const cultivationWorker = new Worker(new URL('../workers/cultivation.ts', import.meta.url), { type: 'module' })
 
   // 处理Worker消息
   cultivationWorker.onmessage = ({ data }) => {
+    isCalculating.value = false
     if (data.type === 'error') {
       showMessage('error', data.message)
       return
@@ -141,9 +141,11 @@
 
   // 一键修炼（直到突破）
   const cultivateUntilBreakthrough = () => {
+    if (isCalculating.value) return
     try {
       // 检查是否已经达到突破条件
       if (!canBreakthrough()) {
+        isCalculating.value = true
         // 发送数据到Worker进行计算
         cultivationWorker.postMessage({
           type: 'cultivateUntilBreakthrough',
@@ -152,7 +154,8 @@
             spirit: playerStore.spirit,
             cultivation: playerStore.cultivation,
             maxCultivation: playerStore.maxCultivation,
-            luck: playerStore.luck
+            luck: playerStore.luck,
+            cultivationRate: playerStore.effectiveCultivationRate
           }
         })
       } else {
@@ -164,6 +167,7 @@
         }
       }
     } catch (error) {
+      isCalculating.value = false
       console.error('一键修炼出错：', error)
       showMessage('error', '修炼失败！')
     }
@@ -197,8 +201,8 @@
     try {
       isAutoCultivating.value = !isAutoCultivating.value
       if (isAutoCultivating.value) {
-        if (cultivationTimer.value) return
-        cultivationTimer.value = setInterval(() => {
+        if (cultivationTimer) return
+        cultivationTimer = setInterval(() => {
           const currentCost = getCurrentCultivationCost()
           if (playerStore.spirit >= currentCost) {
             playerStore.spirit -= currentCost
@@ -206,9 +210,9 @@
           }
         }, autoGainInterval)
       } else {
-        if (cultivationTimer.value) {
-          clearInterval(cultivationTimer.value)
-          cultivationTimer.value = null
+        if (cultivationTimer) {
+          clearInterval(cultivationTimer)
+          cultivationTimer = undefined
         }
       }
     } catch (error) {
@@ -221,9 +225,10 @@
   // 组件卸载时清理定时器
   onUnmounted(() => {
     try {
-      if (cultivationTimer.value) {
-        clearInterval(cultivationTimer.value)
-        cultivationTimer.value = null
+      cultivationWorker.terminate()
+      if (cultivationTimer) {
+        clearInterval(cultivationTimer)
+        cultivationTimer = undefined
       }
       isAutoCultivating.value = false
     } catch (error) {

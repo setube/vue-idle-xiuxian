@@ -12,7 +12,7 @@
   </n-space>
 </template>
 
-<script setup>
+<script setup lang="ts">
   import { usePlayerStore } from '../stores/player'
   import { useMessage } from 'naive-ui'
   import { useRouter } from 'vue-router'
