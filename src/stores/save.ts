@@ -1,11 +1,16 @@
+import { readDungeonIdle } from '../plugins/dungeon-idle'
+import { mergePillEffects } from '../plugins/pills'
 import type { ActiveEffect, EquipmentSlot, GameItem, Herb, Pet, Stats } from '../types/game'
 import { DATA_SYNC_INTERVALS_SECONDS } from '../types/player'
 import type { DataSyncIntervalSeconds, PlayerState } from '../types/player'
 import { assertPlayerData } from '../plugins/crypto'
+import { repairRoundedStats, applyEquipmentChanges } from '../plugins/equipment-stats'
+import { isEquipmentQuality } from '../plugins/equipment-quality'
+import type { EquipmentQuality } from '../types/game'
 import { getRealmLength } from '../plugins/realm'
 import { assert, assertFiniteNumber, isRecord } from '../utils/assert'
 
-const slots: EquipmentSlot[] = ['weapon', 'head', 'body', 'legs', 'feet', 'shoulder', 'hands', 'wrist', 'necklace', 'ring1', 'ring2', 'belt', 'artifact']
+import { equipmentSlots as slots } from '../types/game'
 const effectTypes = new Set(['spiritRate', 'cultivationRate', 'combatBoost', 'allAttributes', 'spiritCap', 'autoHeal', 'spiritRecovery', 'cultivationEfficiency', 'comprehension', 'fireAttribute'])
 const forbiddenKeys = new Set(['__proto__', 'constructor', 'prototype'])
 
@@ -18,6 +23,10 @@ function readStats(value: unknown): Stats {
     stats[key] = amount
   }
   return stats
+}
+
+const legacyQualitySuffix: Record<EquipmentQuality, string> = {
+  common: '', uncommon: '·道', rare: '·天', epic: '·仙', legendary: '·圣', mythic: '·神'
 }
 
 function readItem(value: unknown): GameItem {
@@ -38,6 +47,12 @@ function readItem(value: unknown): GameItem {
     assertFiniteNumber(level, '灵宠等级', 1)
     assertFiniteNumber(star, '灵宠星级')
     const pet: Pet = { ...common, type: 'pet', rarity: value.rarity, level, star, combatAttributes: readStats(value.combatAttributes) }
+    if (value.baseRoll !== undefined) pet.baseRoll = readStats(value.baseRoll)
+    if (value.starProgress !== undefined) {
+      assertFiniteNumber(value.starProgress, '升星进度')
+      assert(Number.isSafeInteger(value.starProgress) && value.starProgress < 2 * (star + 1), '升星进度无效')
+      pet.starProgress = value.starProgress
+    }
     if (value.quality !== undefined) pet.quality = readStats(value.quality)
     for (const key of ['power', 'experience', 'maxExperience', 'upgradeItems'] as const) {
       const amount = value[key]
@@ -47,13 +62,16 @@ function readItem(value: unknown): GameItem {
   }
   assert(slots.includes(value.type as EquipmentSlot), '装备栏位无效')
   assert(typeof value.quality === 'string', '装备品质无效')
-  const equipment = { ...common, type: value.type as EquipmentSlot, quality: value.quality, stats: readStats(value.stats) }
+  const suffix = isEquipmentQuality(value.quality) ? legacyQualitySuffix[value.quality] : ''
+  const name = suffix && value.name.endsWith(suffix) && value.name.length > suffix.length
+    ? value.name.slice(0, -suffix.length) : value.name
+  const equipment = { ...common, name, type: value.type as EquipmentSlot, quality: value.quality, stats: readStats(value.stats) }
   const optional: Partial<Record<'level' | 'enhanceLevel' | 'requiredRealm', number>> = {}
   for (const key of ['level', 'enhanceLevel', 'requiredRealm'] as const) {
     const amount = value[key]
     if (amount !== undefined) { assertFiniteNumber(amount, key); optional[key] = amount }
   }
-  return { ...equipment, ...optional, equipType: equipment.type }
+  return { ...equipment, ...optional, equipType: equipment.type, ...(value.unread === true ? { unread: true } : {}) }
 }
 
 /** Old saves stored every picked herb separately. Preserve all units in bounded stacks. */
@@ -107,6 +125,21 @@ export function normalizePlayerData(value: unknown, defaults: PlayerState, now =
     assert(values.every(entry => typeof entry === 'string'), key + '包含无效值')
     normalized[key] = [...new Set(values)]
   }
+  assert(['village', 'trial', 'done'].includes(String(normalized.journeyStage)), '游历进度无效')
+  normalized.dungeonIdle = readDungeonIdle(normalized.dungeonIdle, normalized as unknown as PlayerState)
+  const reports = normalized.dungeonReports as unknown[]
+  assert(reports.length <= 10, '秘境战报数量无效')
+  normalized.dungeonReports = reports.map(report => {
+    assert(isRecord(report) && typeof report.difficulty === 'number' && [1, 2, 5, 10, 100].includes(report.difficulty), '战报难度无效')
+    for (const key of ['floor', 'rounds', 'enemyRemaining'] as const) {
+      assertFiniteNumber(report[key], key, key === 'enemyRemaining' ? 0 : 1)
+      assert(Number.isSafeInteger(report[key]), '战报数值无效')
+    }
+    assert(Number(report.enemyRemaining) <= 100 && typeof report.won === 'boolean' &&
+      typeof report.result === 'string' && typeof report.settlement === 'string', '战报内容无效')
+    const { difficulty, floor, won, rounds, enemyRemaining, result, settlement } = report
+    return { difficulty, floor, won, rounds, enemyRemaining, result, settlement }
+  })
   normalized.items = (normalized.items as unknown[]).map(readItem)
   normalized.pills = (normalized.pills as unknown[]).map(readItem)
   normalized.artifacts = (normalized.artifacts as unknown[]).map(entry => {
@@ -130,6 +163,8 @@ export function normalizePlayerData(value: unknown, defaults: PlayerState, now =
     normalized.activePet = pet
   }
   normalized.pillFragments = readStats(normalized.pillFragments)
+  normalized.locationVisits = readStats(normalized.locationVisits)
+  for (const count of Object.values(normalized.locationVisits as Stats)) assert(Number.isSafeInteger(count) && count >= 0, '地图探索次数无效')
   for (const count of Object.values(normalized.pillFragments as Stats)) assert(Number.isSafeInteger(count) && count >= 0, '丹方残页数量无效')
   normalized.activeEffects = (normalized.activeEffects as unknown[]).flatMap(entry => {
     assert(isRecord(entry), '丹药效果数据无效')
@@ -143,7 +178,18 @@ export function normalizePlayerData(value: unknown, defaults: PlayerState, now =
     if (typeof entry.name === 'string') effect.name = entry.name
     return [effect]
   })
+  normalized.activeEffects = mergePillEffects(normalized.activeEffects as ActiveEffect[], now)
   for (const key of ['selectedWishEquipQuality', 'selectedWishPetRarity']) assert(normalized[key] === null || typeof normalized[key] === 'string', '心愿单设置无效')
   normalized.petConfig = defaults.petConfig
-  return normalized as unknown as PlayerState
+  const player = normalized as unknown as PlayerState
+  if (value.journeyStage === undefined && (player.explorationCount > 0 || player.dungeonTotalRuns > 0 ||
+      player.level > 1 || player.items.length > 0 || Object.values(player.equippedArtifacts).some(Boolean) ||
+      player.activePet || player.pillRecipes.length > 0)) player.journeyStage = 'done'
+  for (const item of [...player.items, ...player.artifacts]) {
+    if (item.type !== 'pet' && item.type !== 'pill') repairRoundedStats(item)
+  }
+  for (const item of Object.values(player.equippedArtifacts)) {
+    if (item) applyEquipmentChanges(player, repairRoundedStats(item))
+  }
+  return player
 }

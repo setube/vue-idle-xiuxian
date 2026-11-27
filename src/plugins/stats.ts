@@ -37,14 +37,7 @@ export const statNameMapping: Record<string, string> = {
 export const getStatName = (stat: string) => {
   return statNameMapping[stat] || stat
 }
-// 格式化属性值（处理百分比和数值）
-export const formatStatValue = (stat: string, value: number | null | undefined) => {
-  // 处理null或undefined值
-  if (value === null || value === undefined) {
-    return '0'
-  }
-  // 这些属性需要显示为百分比
-  const percentageStats = [
+const percentageStats = new Set([
     'critRate',
     'comboRate',
     'counterRate',
@@ -67,9 +60,18 @@ export const formatStatValue = (stat: string, value: number | null | undefined) 
     'cultivationRate',
     'spiritRate',
     'luck'
-  ]
-  if (percentageStats.includes(stat)) {
+  ])
+export const isPercentageStat = (stat: string) => percentageStats.has(stat)
+
+// 格式化属性值（处理百分比和数值）
+export const formatStatValue = (stat: string, value: number | null | undefined) => {
+  // 处理null或undefined值
+  if (value === null || value === undefined) {
+    return '0'
+  }
+  // 这些属性需要显示为百分比
+  if (isPercentageStat(stat)) {
     return `${(value * 100).toFixed(1)}%`
   }
-  return value.toFixed(1)
+  return String(Number(value.toFixed(2)))
 }

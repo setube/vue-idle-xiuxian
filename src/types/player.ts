@@ -1,3 +1,5 @@
+import type { DungeonIdle } from '../plugins/dungeon-idle'
+import type { BattleReport } from '../plugins/battle-report'
 import type { ActiveEffect, Equipment, EquipmentSlot, GameItem, Herb, Pet, Stats } from './game'
 
 export const DATA_SYNC_INTERVALS_SECONDS = [1, 2, 5, 10, 30] as const
@@ -9,6 +11,11 @@ export interface PlayerState {
   isGMMode: boolean
   isDarkMode: boolean
   dataSyncIntervalSeconds: DataSyncIntervalSeconds
+  lastSpiritTickAt: number
+  autoCultivationEnabled: boolean
+  journeyStage: 'village' | 'trial' | 'done'
+  autoExploreLocation: string
+  explorationFirst: boolean
   activePet: Pet | null
   petEssence: number
   petConfig: { rarityMap: Record<string, { name: string; color: string; probability: number; essenceBonus: number }> }
@@ -26,6 +33,8 @@ export interface PlayerState {
   alchemyRate: number
   pills: GameItem[]
   pillFragments: Record<string, number>
+  researchRecipe: string
+  starterAlchemyClaimed: boolean
   pillRecipes: string[]
   activeEffects: ActiveEffect[]
   pillsCrafted: number
@@ -37,6 +46,8 @@ export interface PlayerState {
   spiritStones: number
   reinforceStones: number
   refinementStones: number
+  foundationRewardClaimed: boolean
+  firstReforgeRewardClaimed: boolean
   herbs: Herb[]
   items: GameItem[]
   artifacts: Equipment[]
@@ -45,9 +56,12 @@ export interface PlayerState {
   totalCultivationTime: number
   breakthroughCount: number
   explorationCount: number
+  locationVisits: Record<string, number>
   itemsFound: number
   eventTriggered: number
   unlockedPillRecipes: number
+  dungeonIdle: DungeonIdle
+  dungeonReports: BattleReport[]
   dungeonDifficulty: number
   dungeonHighestFloor: number
   dungeonHighestFloor_2: number

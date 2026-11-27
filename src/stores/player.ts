@@ -1,11 +1,18 @@
+import { canIdleAt, MAX_OFFLINE_SECONDS, newDungeonIdle, settleDungeonIdle } from '../plugins/dungeon-idle'
+import { investedEssence, setPetGrowth, starResult, transferPlan, upgradeCost } from '../plugins/pet-growth'
 import { defineStore } from 'pinia'
-import { pillRecipes, tryCreatePill, calculatePillEffect } from '../plugins/pills'
+import { herbs as herbDefinitions } from '../plugins/herbs'
+import { STARTER_RECIPE_ID, mergePillEffects, pillRecipes, tryCreatePill, calculatePillEffect } from '../plugins/pills'
 import { decryptData, encryptData, validateData } from '../plugins/crypto'
 import { DATA_SYNC_INTERVALS_SECONDS, DEFAULT_DATA_SYNC_INTERVAL_SECONDS } from '../types/player'
 import type { DataSyncIntervalSeconds, PlayerState, ActionResult } from '../types/player'
 import type { Equipment, EquipmentSlot, GameItem, Herb, Pet, Pill, Stats } from '../types/game'
 import { assert, assertFiniteNumber } from '../utils/assert'
 import { normalizePlayerData } from './save'
+import { claimFirstReforgeReward, focusCost, focusPreview } from '../plugins/equipment'
+import { applyEquipmentChanges, equipmentDifferences } from '../plugins/equipment-stats'
+import { isPet, petRoster, splitEssence, projectedChanges, battlePoints, type ReleaseQuote } from '../plugins/companion-ranking'
+import { stonePrices } from '../plugins/equipment-prices'
 import {
   createPlayerSaveSerializer,
   getPlayerSaveStatus,
@@ -20,8 +27,19 @@ import {
   schedulePlayerPersistence
 } from './player-persistence'
 import { deleteLegacyPlayerDatabase, LEGACY_PLAYER_MIGRATION_KEY, readLegacyPlayerSave } from './legacy-save'
-import { getCultivationCost, getCultivationGain } from '../utils/cultivation'
-import { getRealmName, getRealmLength } from '../plugins/realm'
+import { getBaseCultivationGain, getCultivationCost, getCultivationPlan } from '../utils/cultivation'
+import { foundationGear, foundationLevel } from '../plugins/foundation-reward'
+import { realmGrowth, getRealmName, getRealmLength } from '../plugins/realm'
+
+// Input state is local to the open page and must never survive a reload.
+export const useCultivationInput = defineStore('cultivation-input', {
+  state: () => ({ manualPress: false })
+})
+
+export { MAX_OFFLINE_SECONDS }
+export const useDungeonActivity = defineStore('dungeon-activity', {
+  state: () => ({ challenging: false })
+})
 
 export const createInitialState = (): PlayerState => ({
     // 是否新玩家
@@ -32,6 +50,11 @@ export const createInitialState = (): PlayerState => ({
     isDarkMode: typeof localStorage !== 'undefined' && localStorage.getItem('darkMode') === 'true',
     // 玩家数据同步间隔，默认5秒
     dataSyncIntervalSeconds: DEFAULT_DATA_SYNC_INTERVAL_SECONDS,
+    lastSpiritTickAt: 0,
+    autoCultivationEnabled: false,
+    journeyStage: 'village',
+    autoExploreLocation: '',
+    explorationFirst: true,
     // 灵宠系统
     activePet: null, // 当前出战的灵宠
     petEssence: 0, // 灵宠精华
@@ -50,7 +73,7 @@ export const createInitialState = (): PlayerState => ({
     level: 1, // 境界等级
     realm: '练气期一层', // 当前境界名称
     cultivation: 0, // 当前修为值
-    maxCultivation: 100, // 当前境界最大修为值
+    maxCultivation: getRealmName(1).maxCultivation,
     spirit: 0, // 灵力值
     spiritRate: 1, // 灵力获取倍率
     luck: 1, // 幸运值
@@ -60,6 +83,8 @@ export const createInitialState = (): PlayerState => ({
     // 丹药系统
     pills: [], // 丹药库存
     pillFragments: {}, // 丹方残页（key为丹方ID，value为数量）
+    starterAlchemyClaimed: false,
+    researchRecipe: '',
     pillRecipes: [], // 已获得的完整丹方
     activeEffects: [], // 当前生效的丹药效果列表
     pillsCrafted: 0, // 炼制丹药次数
@@ -103,6 +128,8 @@ export const createInitialState = (): PlayerState => ({
     spiritStones: 0, // 灵石数量
     reinforceStones: 0, // 强化石数量
     refinementStones: 0, // 洗练石数量
+    foundationRewardClaimed: false,
+    firstReforgeRewardClaimed: false,
     herbs: [], // 灵草库存
     items: [], // 物品库存
     artifacts: [], // 法宝装备
@@ -111,15 +138,10 @@ export const createInitialState = (): PlayerState => ({
       weapon: null, // 武器
       head: null, // 头部
       body: null, // 衣服
-      legs: null, // 裤子
       feet: null, // 鞋子
-      shoulder: null, // 肩甲
-      hands: null, // 手套
       wrist: null, // 护腕
       necklace: null, // 项链
-      ring1: null, // 戒指1
-      ring2: null, // 戒指2
-      belt: null, // 腰带
+      ring: null, // 戒指
       artifact: null // 法宝
     },
     // 装备加成属性
@@ -159,10 +181,13 @@ export const createInitialState = (): PlayerState => ({
     totalCultivationTime: 0, // 总修炼时间
     breakthroughCount: 0, // 突破次数
     explorationCount: 0, // 探索次数
+    locationVisits: {},
     itemsFound: 0, // 获得物品数量
     eventTriggered: 0, // 触发事件次数
     unlockedPillRecipes: 0, // 解锁丹方数量
     // 秘境相关数据
+    dungeonIdle: newDungeonIdle(),
+    dungeonReports: [],
     dungeonDifficulty: 1, // 难度选择
     dungeonHighestFloor: 0, // 最高通关层数
     dungeonHighestFloor_2: 0, // 最高通关层数
@@ -216,16 +241,21 @@ export const usePlayerStore = defineStore('player', {
       const effects = this.effectBonuses
       return this.cultivationRate * this.artifactBonuses.cultivationRate * (1 + (effects.cultivationRate ?? 0) + (effects.cultivationEfficiency ?? 0) + (effects.comprehension ?? 0) + (effects.allAttributes ?? 0))
     },
+    cultivationPlan(): ReturnType<typeof getCultivationPlan> {
+      return getCultivationPlan(this.level, this.maxCultivation - this.cultivation, this.effectiveCultivationRate)
+    },
     effectiveSpiritCap(): number {
       // A full realm's cultivation always fits; a capacity pill adds room to stockpile.
       const cost = getCultivationCost(this.level)
-      const gain = getCultivationGain(this.level)
-      const needed = cost * Math.ceil(this.maxCultivation / gain)
+      const gain = getBaseCultivationGain(this.level)
+      const trainingCapacity = this.level <= 6 ? Math.max(this.maxCultivation, 100 * this.level) : this.maxCultivation
+      const needed = cost * Math.ceil(trainingCapacity / gain)
       return Math.min(Number.MAX_VALUE, Math.max(100, needed) * (1 + (this.effectBonuses.spiritCap ?? 0)))
     },
     effectiveBaseAttributes(): Stats {
       const all = 1 + (this.effectBonuses.allAttributes ?? 0)
-      return Object.fromEntries(Object.entries(this.baseAttributes).map(([key, value]) => [key, value * all * (key === 'attack' ? 1 + (this.effectBonuses.fireAttribute ?? 0) : 1)]))
+      const growth: Stats = realmGrowth(this.level, this.cultivation / Math.max(1, this.maxCultivation))
+      return Object.fromEntries(Object.entries(this.baseAttributes).map(([key, value]) => [key, (value + (growth[key] ?? 0)) * all * (key === 'attack' ? 1 + (this.effectBonuses.fireAttribute ?? 0) : 1)]))
     },
     effectiveCombatAttributes(): Stats {
       const multiplier = 1 + (this.effectBonuses.allAttributes ?? 0)
@@ -239,6 +269,18 @@ export const usePlayerStore = defineStore('player', {
       const result = { ...this.specialAttributes }
       result.combatBoost += this.effectBonuses.combatBoost ?? 0
       return result
+    },
+    canClaimFoundationGear(): boolean {
+      return !this.foundationRewardClaimed &&
+        (this.level >= foundationLevel || this.unlockedRealms.includes(getRealmName(foundationLevel).name))
+    },
+    combatPower(): number {
+      return battlePoints({
+        ...this.effectiveBaseAttributes,
+        ...this.effectiveCombatAttributes,
+        ...this.effectiveCombatResistance,
+        ...this.effectiveSpecialAttributes
+      }, 2)
     },
     // 获取灵宠的属性加成
     getPetBonus(): Stats {
@@ -316,8 +358,49 @@ export const usePlayerStore = defineStore('player', {
     }
   },
   actions: {
+    tickDungeonIdle(now = Date.now(), returning = false) {
+      settleDungeonIdle(this.$state, now, !returning && useDungeonActivity().challenging, returning)
+    },
+    setDungeonChallenge(challenging: boolean, now = Date.now()) {
+      const activity = useDungeonActivity()
+      if (challenging === activity.challenging) return
+      this.tickDungeonIdle(now)
+      activity.challenging = challenging
+    },
+    setIdleFloor(difficulty: number, floor: number, now = Date.now()) {
+      if (floor !== 0 && !canIdleAt(this.$state, difficulty, floor)) return false
+      this.tickDungeonIdle(now)
+      if (floor) this.dungeonIdle.difficulty = difficulty
+      this.dungeonIdle.floor = floor
+      this.dungeonIdle.at = Math.max(this.dungeonIdle.at, now)
+      void this.saveData()
+      return true
+    },
+    focusEquipment(target: Equipment, stat: string): ActionResult {
+      const worn = this.equippedArtifacts[target.type]
+      const item = worn?.id === target.id ? worn : this.items.find((i): i is Equipment => i.type === target.type && i.id === target.id)
+      const preview = item && focusPreview(this, item, stat)
+      if (!item || !preview || preview.after <= preview.before) return { success: false, message: '该属性当前无法继续提升' }
+      if (this.refinementStones < focusCost) return { success: false, message: '洗练石不足' }
+      this.refinementStones -= focusCost
+      item.stats[stat] = preview.after
+      if (worn?.id === item.id) applyEquipmentChanges(this, { [stat]: preview.after - preview.before })
+      void this.saveData()
+      return { success: true, message: '定向洗练成功' }
+    },
+    rewardDungeonMilestone(floor: number) {
+      if (floor < 1 || floor % 5 !== 0) return { stones: 0, bonus: 0 }
+      const boss = floor % 10 === 0
+      const stones = (boss ? 5 : 2) * this.dungeonDifficulty
+      this.refinementStones += stones
+      if (boss) this.dungeonBossKills++
+      else this.dungeonEliteKills++
+      const bonus = floor === 5 ? claimFirstReforgeReward(this) : 0
+      return { stones, bonus }
+    },
     /** Pinia hydrates selected encrypted state synchronously; legacy IndexedDB is read exactly once when needed. */
-    async initializePlayer(): Promise<void> {
+    async initializePlayer(): Promise<number> {
+      let offlineGain = 0
       registerPlayerPersistenceStore(this)
       try {
         const persistedSave = readPersistedPlayerSave()
@@ -349,11 +432,16 @@ export const usePlayerStore = defineStore('player', {
           assert(deleted, '旧版存档仍被其他页面占用，迁移标记未写入')
           localStorage.setItem(LEGACY_PLAYER_MIGRATION_KEY, 'true')
         }
+        const now = Date.now()
+        offlineGain = this.recoverOfflineSpirit(now)
+        this.tickDungeonIdle(now, true)
+        if (offlineGain > 0 || this.dungeonIdle.floor) await this.flushData()
       } catch (error) {
         console.error('加载存档失败:', error)
       }
       this.isDarkMode = localStorage.getItem('darkMode') === 'true'
       this.updateHtmlDarkMode(this.isDarkMode)
+      return offlineGain
     },
     // 更新HTML暗黑模式类
     updateHtmlDarkMode(isDarkMode: boolean) {
@@ -404,6 +492,8 @@ export const usePlayerStore = defineStore('player', {
       await this.flushData()
       this.$reset()
       this.$patch(restored)
+      this.lastSpiritTickAt = Date.now()
+      if (this.dungeonIdle.floor) this.dungeonIdle.at = this.lastSpiritTickAt
       this.expireEffects()
       this.updateHtmlDarkMode(this.isDarkMode)
       await persistPlayerImmediately(this)
@@ -412,6 +502,16 @@ export const usePlayerStore = defineStore('player', {
       await this.flushData()
       this.$reset()
       await persistPlayerImmediately(this)
+    },
+    recoverOfflineSpirit(now = Date.now()): number {
+      const previous = this.lastSpiritTickAt
+      this.lastSpiritTickAt = now
+      if (previous <= 0 || previous >= now) return 0
+      const seconds = Math.min(MAX_OFFLINE_SECONDS, Math.floor((now - previous) / 1000))
+      const room = Math.max(0, this.effectiveSpiritCap - this.spirit)
+      const gained = Math.min(room, seconds * this.spiritRate * this.artifactBonuses.spiritRate)
+      this.spirit += gained
+      return gained
     },
     // 获取灵力
     gainSpirit(amount: number) {
@@ -422,16 +522,31 @@ export const usePlayerStore = defineStore('player', {
       this.saveData()
     },
     // 修炼增加修为
+    tickAutoCultivation(explorationReserve = 0) {
+      if (!this.autoCultivationEnabled || this.level >= getRealmLength() || useCultivationInput().manualPress) return
+      const { cost, gain, totalCost } = this.cultivationPlan
+      if (totalCost === 0 || this.spirit - totalCost >= explorationReserve) {
+        this.spirit -= totalCost
+        this.cultivate(Math.max(0, this.maxCultivation - this.cultivation))
+        return
+      }
+      if (this.spirit - cost < explorationReserve) return
+      this.spirit -= cost
+      this.cultivate(gain)
+    },
     cultivate(amount: number) {
+      this.totalCultivationTime += 1
+      this.gainCultivation(amount)
+      this.saveData()
+    },
+    gainCultivation(amount: number) {
       // 确保amount是数字类型
       const numAmount = Number(String(amount).replace(/[^0-9.-]/g, '')) || 0
       this.cultivation = Number(String(this.cultivation).replace(/[^0-9.-]/g, '')) || 0
-      this.cultivation += numAmount
-      this.totalCultivationTime += 1 // 增加修炼时间统计
+      this.cultivation = Number((this.cultivation + numAmount).toFixed(6))
       if (this.cultivation >= this.maxCultivation) {
-        this.tryBreakthrough()
+        if (!this.tryBreakthrough()) this.cultivation = this.maxCultivation
       }
-      this.saveData()
     },
     // 尝试突破
     tryBreakthrough() {
@@ -458,8 +573,16 @@ export const usePlayerStore = defineStore('player', {
       }
       return false
     },
+    claimFoundationGear(id: Equipment['id']): boolean {
+      const choice = foundationGear.find(item => item.id === id)
+      if (!choice || !this.canClaimFoundationGear) return false
+      this.foundationRewardClaimed = true
+      this.gainItem({ ...choice, stats: { ...choice.stats } })
+      return true
+    },
     // 获得物品
     gainItem(item: GameItem) {
+      if (item.type !== 'pet' && item.type !== 'pill') item.unread = true
       this.items.push(item)
       this.itemsFound++ // 增加获得物品统计
       this.saveData()
@@ -473,71 +596,34 @@ export const usePlayerStore = defineStore('player', {
       }
       return { success: false, message: '无法使用该物品' }
     },
-    // 卖出装备
-    async sellEquipment(equipment: Equipment): Promise<ActionResult> {
-      const index = this.items.findIndex(i => i.id === equipment.id)
-      if (index === -1) {
-        return { success: false, message: '装备不存在' }
+    quoteEquipmentSale(items: Equipment[]) {
+      return {
+        ids: items.map(item => item.id),
+        total: items.reduce((sum, item) => sum + (stonePrices.get(item.quality) ?? NaN), 0),
+        enhanced: items.filter(item => (item.enhanceLevel ?? 0) > 0).length
       }
-      return new Promise<ActionResult>(resolve => {
-        const worker = new Worker(new URL('../workers/equipment.ts', import.meta.url))
-        worker.onmessage = e => {
-          const { stoneAmount, itemId } = e.data
-          this.reinforceStones += stoneAmount
-          const index = this.items.findIndex(i => i.id === itemId)
-          if (index > -1) {
-            this.items.splice(index, 1)
-          }
-          this.saveData()
-          worker.terminate()
-          resolve({ success: true, message: `成功卖出装备，获得${stoneAmount}个强化石` })
-        }
-        // 只传递必要的数据
-        worker.postMessage({
-          type: 'single',
-          equipment: {
-            id: equipment.id,
-            quality: equipment.quality
-          }
-        })
-      })
     },
-    // 批量卖出装备
+    confirmEquipmentSale(quote: { ids: Equipment['id'][]; total: number; enhanced: number }): ActionResult {
+      const ids = new Set(quote.ids)
+      const items = this.items.filter((item): item is Equipment =>
+        ids.has(item.id) && item.type !== 'pill' && item.type !== 'pet')
+      const current = this.quoteEquipmentSale(items)
+      if (!items.length || items.length !== ids.size || current.total !== quote.total || current.enhanced !== quote.enhanced) {
+        return { success: false, message: '装备清单已变化，请重新选择' }
+      }
+      const sold = new Set<GameItem>(items)
+      this.items = this.items.filter(item => !sold.has(item))
+      this.reinforceStones += current.total
+      this.saveData()
+      return { success: true, message: `已卖出 ${items.length} 件装备，获得 ${current.total} 个强化石` }
+    },
+    async sellEquipment(item: Equipment): Promise<ActionResult> {
+      return this.confirmEquipmentSale(this.quoteEquipmentSale([item]))
+    },
     async batchSellEquipments(quality: string | null = null, equipmentType: string | null = null): Promise<ActionResult> {
-      return new Promise<ActionResult>(resolve => {
-        const worker = new Worker(new URL('../workers/equipment.ts', import.meta.url))
-        worker.onmessage = e => {
-          const { totalStones, itemsToRemove, count } = e.data
-          this.reinforceStones += totalStones
-          this.items = this.items.filter(item => !itemsToRemove.includes(item.id))
-          this.saveData()
-          worker.terminate()
-          resolve({
-            success: true,
-            message: `成功卖出${count}件装备，获得${totalStones}个强化石`
-          })
-        }
-        // 将数据转换为纯对象数组
-        const itemsToSell = this.items
-          .filter((item): item is Equipment => item.type !== 'pill' && item.type !== 'pet')
-          .filter(item => {
-            if (equipmentType && item.type !== equipmentType) return false
-            if (quality && item.quality !== quality) return false
-            return true
-          })
-          .map(item => ({
-            id: item.id,
-            type: item.type,
-            quality: item.quality
-          }))
-        // 发送简化后的数据
-        worker.postMessage({
-          type: 'batch',
-          items: JSON.parse(JSON.stringify(itemsToSell)),
-          quality,
-          equipmentType
-        })
-      })
+      const items = this.items.filter((item): item is Equipment => item.type !== 'pill' && item.type !== 'pet'
+        && (!quality || item.quality === quality) && (!equipmentType || item.type === equipmentType))
+      return this.confirmEquipmentSale(this.quoteEquipmentSale(items))
     },
     // Apply only a pill actually present in inventory, and consume exactly once.
     usePill(pill: Pill): ActionResult {
@@ -547,16 +633,18 @@ export const usePlayerStore = defineStore('player', {
       if (stored.type !== 'pill') return { success: false, message: '无效的丹药' }
       assertFiniteNumber(stored.effect.value, '丹药效果')
       assertFiniteNumber(stored.effect.duration, '丹药持续时间', 1)
-      const now = Date.now()
-      this.expireEffects(now)
-      this.activeEffects.push({ ...stored.effect, name: stored.name, startTime: now, endTime: now + stored.effect.duration * 1000 })
       this.items.splice(index, 1)
-      this.pillsConsumed++
+      this.applyPillEffect(stored.name, stored.effect)
       this.saveData()
       return { success: true, message: '使用丹药成功' }
     },
     expireEffects(now = Date.now()): void {
       this.activeEffects = this.activeEffects.filter(effect => effect.endTime > now)
+    },
+    applyPillEffect(name: string, effect: Pill['effect']) {
+      const now = Date.now()
+      this.activeEffects = mergePillEffects([...this.activeEffects, { ...effect, name, startTime: now, endTime: now + effect.duration * 1000 }], now)
+      this.pillsConsumed++
     },
     gainHerb(herb: Herb, count = 1): void {
       assertFiniteNumber(count, '灵草数量', 1)
@@ -596,6 +684,36 @@ export const usePlayerStore = defineStore('player', {
       return this.deployPet(pet)
     },
     // 召回灵宠
+    petScore(pet: Pet): number {
+      return battlePoints(projectedChanges(this, this.effectBonuses, pet.combatAttributes, this.activePet?.combatAttributes))
+    },
+    classifyPets() {
+      const pets = this.items.filter(isPet)
+      const scores = new Map(pets.map(p => [p.id, this.petScore(p)]))
+      return petRoster(pets, this.activePet?.id, p => scores.get(p.id)!)
+    },
+    petEssenceYield(pet: Pet) {
+      return splitEssence(this.petConfig.rarityMap[pet.rarity]?.essenceBonus ?? 0)
+    },
+    quotePetRelease(pets: Pet[]): ReleaseQuote {
+      return { ids: pets.map(p => p.id), essence: pets.reduce((sum, pet) => sum + this.petEssenceYield(pet).release, 0) }
+    },
+    receiveDrawnPet(pet: Pet) {
+      this.petEssence += this.petEssenceYield(pet).draw
+      this.items.push(pet)
+    },
+    releasePets(quote: ReleaseQuote, surplusOnly = true): ActionResult {
+      const ids = new Set(quote.ids)
+      const pets = this.items.filter(isPet).filter(p => ids.has(p.id))
+      const protectedSet = surplusOnly ? this.classifyPets().surplus : null
+      if (!pets.length || pets.length !== quote.ids.length || ids.size !== pets.length ||
+          pets.some(p => p.id === this.activePet?.id || (protectedSet && !protectedSet.has(p.id))) ||
+          this.quotePetRelease(pets).essence !== quote.essence) return { success: false, message: '灵宠清单已变化，请重新选择。' }
+      this.items = this.items.filter(item => !isPet(item) || !ids.has(item.id))
+      this.petEssence += quote.essence
+      void this.saveData()
+      return { success: true, message: `放生 ${pets.length} 只，获得 ${quote.essence} 灵宠精华。` }
+    },
     recallPet() {
       if (!this.activePet) {
         return { success: false, message: '当前没有出战的灵宠' }
@@ -629,10 +747,10 @@ export const usePlayerStore = defineStore('player', {
       const originalCombatResistance = { ...this.combatResistance }
       const originalSpecialAttributes = { ...this.specialAttributes }
       // 更新基础属性
-      this.baseAttributes.attack = originalBaseAttributes.attack - petBonus.attack
-      this.baseAttributes.defense = originalBaseAttributes.defense - petBonus.defense
-      this.baseAttributes.health = originalBaseAttributes.health - petBonus.health
-      this.baseAttributes.speed = originalBaseAttributes.speed - petBonus.speed
+      this.baseAttributes.attack = originalBaseAttributes.attack - (petBonus.attack ?? 0)
+      this.baseAttributes.defense = originalBaseAttributes.defense - (petBonus.defense ?? 0)
+      this.baseAttributes.health = originalBaseAttributes.health - (petBonus.health ?? 0)
+      this.baseAttributes.speed = originalBaseAttributes.speed - (petBonus.speed ?? 0)
       // 更新战斗属性
       Object.keys(this.combatAttributes).forEach(key => {
         this.combatAttributes[key] = originalCombatAttributes[key] - (petBonus[key] || 0)
@@ -656,10 +774,10 @@ export const usePlayerStore = defineStore('player', {
       const originalCombatResistance = { ...this.combatResistance }
       const originalSpecialAttributes = { ...this.specialAttributes }
       // 更新基础属性
-      this.baseAttributes.attack = originalBaseAttributes.attack + petBonus.attack
-      this.baseAttributes.defense = originalBaseAttributes.defense + petBonus.defense
-      this.baseAttributes.health = originalBaseAttributes.health + petBonus.health
-      this.baseAttributes.speed = originalBaseAttributes.speed + petBonus.speed
+      this.baseAttributes.attack = originalBaseAttributes.attack + (petBonus.attack ?? 0)
+      this.baseAttributes.defense = originalBaseAttributes.defense + (petBonus.defense ?? 0)
+      this.baseAttributes.health = originalBaseAttributes.health + (petBonus.health ?? 0)
+      this.baseAttributes.speed = originalBaseAttributes.speed + (petBonus.speed ?? 0)
       // 更新战斗属性
       Object.keys(this.combatAttributes).forEach(key => {
         this.combatAttributes[key] = originalCombatAttributes[key] + (petBonus[key] || 0)
@@ -672,6 +790,36 @@ export const usePlayerStore = defineStore('player', {
       Object.keys(this.specialAttributes).forEach(key => {
         this.specialAttributes[key] = originalSpecialAttributes[key] + (petBonus[key] || 0)
       })
+    },
+    bestQualityCandidates(): Equipment[] {
+      const qualities = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic']
+      const upgrades = new Map<EquipmentSlot, Equipment>()
+      for (const item of this.items) {
+        if (item.type === 'pill' || item.type === 'pet' || (item.requiredRealm ?? 0) > this.level) continue
+        const current = upgrades.get(item.type) ?? this.equippedArtifacts[item.type]
+        const rank = qualities.indexOf(item.quality)
+        const oldRank = current ? qualities.indexOf(current.quality) : -1
+        const differences = current && rank === oldRank ? Object.values(equipmentDifferences(item.stats, current.stats)) : []
+        if (rank > oldRank || (differences.length > 0 && differences.every(delta => delta > 0))) {
+          upgrades.set(item.type, item)
+        }
+      }
+      return [...upgrades.values()]
+    },
+    equipBestQuality(): number {
+      let changed = 0
+      for (const item of this.bestQualityCandidates()) {
+        if (this.equipArtifact(item, item.type).success) changed++
+      }
+      let clearedUnread = false
+      for (const item of this.items) {
+        if (item.type !== 'pet' && item.type !== 'pill' && item.unread) {
+          delete item.unread
+          clearedUnread = true
+        }
+      }
+      if (clearedUnread) this.saveData()
+      return changed
     },
     // 穿上装备
     equipArtifact(artifact: Equipment, slot: EquipmentSlot): ActionResult {
@@ -689,26 +837,9 @@ export const usePlayerStore = defineStore('player', {
         this.items.splice(index, 1)
       }
       // 穿上新装备
+      delete artifact.unread
       this.equippedArtifacts[slot] = artifact
-      // 应用装备加成
-      if (artifact.stats) {
-        Object.entries(artifact.stats).forEach(([key, value]) => {
-          // 先更新artifactBonuses
-          if (this.artifactBonuses[key] !== undefined) {
-            this.artifactBonuses[key] += value
-            // 根据属性类型应用到对应的属性组
-            if (key in this.baseAttributes) {
-              this.baseAttributes[key] += value
-            } else if (key in this.combatAttributes) {
-              this.combatAttributes[key] = Math.min(1, this.combatAttributes[key] + value)
-            } else if (key in this.combatResistance) {
-              this.combatResistance[key] = Math.min(1, this.combatResistance[key] + value)
-            } else if (key in this.specialAttributes) {
-              this.specialAttributes[key] += value
-            }
-          }
-        })
-      }
+      applyEquipmentChanges(this, artifact.stats)
       this.saveData()
       return { success: true, message: '装备成功' }
     },
@@ -716,24 +847,7 @@ export const usePlayerStore = defineStore('player', {
     unequipArtifact(slot: EquipmentSlot): boolean {
       const artifact = this.equippedArtifacts[slot]
       if (artifact) {
-        // 移除装备加成
-        if (artifact.stats) {
-          Object.entries(artifact.stats).forEach(([key, value]) => {
-            if (this.artifactBonuses[key] !== undefined) {
-              this.artifactBonuses[key] -= value
-              // 从对应的属性组中移除加成
-              if (key in this.baseAttributes) {
-                this.baseAttributes[key] -= value
-              } else if (key in this.combatAttributes) {
-                this.combatAttributes[key] = Math.max(0, this.combatAttributes[key] - value)
-              } else if (key in this.combatResistance) {
-                this.combatResistance[key] = Math.max(0, this.combatResistance[key] - value)
-              } else if (key in this.specialAttributes) {
-                this.specialAttributes[key] -= value
-              }
-            }
-          })
-        }
+        applyEquipmentChanges(this, equipmentDifferences({}, artifact.stats))
         // 将装备返回到背包
         this.items.push(artifact)
         this.equippedArtifacts[slot] = null
@@ -746,8 +860,29 @@ export const usePlayerStore = defineStore('player', {
     getArtifactBonus(type: string): number {
       return this.artifactBonuses[type] || 1
     },
+    learnRecipe(id: string) {
+      if (!this.pillRecipes.includes(id)) {
+        this.pillRecipes.push(id)
+        this.unlockedPillRecipes++
+      }
+      delete this.pillFragments[id]
+      if (this.researchRecipe === id) this.researchRecipe = ''
+    },
+    claimStarterAlchemy(): boolean {
+      if (this.starterAlchemyClaimed || this.dungeonHighestFloor < 1) return false
+      const recipe = pillRecipes.find(entry => entry.id === STARTER_RECIPE_ID)!
+      this.starterAlchemyClaimed = true
+      this.learnRecipe(recipe.id)
+      for (const material of recipe.materials) {
+        const herb = herbDefinitions.find(entry => entry.id === material.herb)!
+        this.gainHerb({ ...herb, quality: 'common', value: herb.baseValue }, material.count)
+      }
+      void this.saveData()
+      return true
+    },
     // 获得丹方残页
     gainPillFragment(recipeId: string) {
+      if (this.pillRecipes.includes(recipeId)) return
       if (!this.pillFragments[recipeId]) {
         this.pillFragments[recipeId] = 0
       }
@@ -755,11 +890,7 @@ export const usePlayerStore = defineStore('player', {
       // 检查是否可以合成完整丹方
       const recipe = pillRecipes.find(r => r.id === recipeId)
       if (recipe && this.pillFragments[recipeId] >= recipe.fragmentsNeeded) {
-        this.pillFragments[recipeId] -= recipe.fragmentsNeeded
-        if (!this.pillRecipes.includes(recipeId)) {
-          this.pillRecipes.push(recipeId)
-          this.unlockedPillRecipes++
-        }
+        this.learnRecipe(recipeId)
       }
       this.saveData()
     },
@@ -773,16 +904,7 @@ export const usePlayerStore = defineStore('player', {
       const result = tryCreatePill(recipe, this.herbs, this, fragments, this.luck * this.alchemyRate)
       if (result.success) {
         for (const material of recipe.materials) this.consumeHerbs(material.herb, material.count)
-        // 创建丹药
-        const effect = calculatePillEffect(recipe, this.level)
-        const pill: Pill = {
-          id: `${recipe.id}_${Date.now()}`,
-          name: recipe.name,
-          description: recipe.description,
-          type: 'pill',
-          effect
-        }
-        this.items.push(pill)
+        this.applyPillEffect(recipe.name, calculatePillEffect(recipe, this.level))
         this.pillsCrafted++
         this.saveData()
       }
@@ -798,88 +920,56 @@ export const usePlayerStore = defineStore('player', {
       if (!this.items) {
         this.items = []
       }
+      equipment.unread = true
       this.items.push(equipment)
       this.saveData()
     },
-    // 升级灵宠
-    upgradePet(pet: Pet, essenceCount: number): ActionResult {
-      if (this.petEssence < essenceCount) {
-        return { success: false, message: '灵宠精华不足' }
+    ownedPet(id: Pet['id']) {
+      return this.items.find((item): item is Pet => isPet(item) && item.id === id)
+    },
+    growPet(pet: Pet, level: number, star: number) {
+      const deployed = this.activePet?.id === pet.id
+      if (deployed) this.resetPetBonuses()
+      setPetGrowth(pet, level, star)
+      if (deployed) {
+        this.activePet = pet
+        this.applyPetBonuses()
       }
-      // 消耗精华并提升等级
-      this.petEssence -= essenceCount
-      const petIndex = this.items.findIndex(item => item.id === pet.id)
-      if (petIndex > -1) {
-        const currentPet = this.items[petIndex]
-        if (currentPet.type !== 'pet') return { success: false, message: '灵宠不存在' }
-        if (this.activePet?.id === currentPet.id) this.resetPetBonuses()
-        currentPet.level = (currentPet.level || 1) + 1
-        // 根据品质和等级提升战斗属性
-        const qualityMultipliers: Stats = {
-            divine: 2.0,
-            celestial: 1.8,
-            mystic: 1.6,
-            spiritual: 1.4,
-            mortal: 1.2
-          }
-        const qualityMultiplier = qualityMultipliers[currentPet.rarity] || 1.2
-        // 更新战斗属性
-        currentPet.combatAttributes = {
-          attack: Math.floor(currentPet.combatAttributes.attack * (1 + 0.01 * qualityMultiplier)),
-          health: Math.floor(currentPet.combatAttributes.health * (1 + 0.01 * qualityMultiplier)),
-          defense: Math.floor(currentPet.combatAttributes.defense * (1 + 0.01 * qualityMultiplier)),
-          speed: Math.floor(currentPet.combatAttributes.speed * (1 + 0.01 * qualityMultiplier)),
-
-          critRate: currentPet.combatAttributes.critRate + 0.01 * qualityMultiplier,
-          comboRate: currentPet.combatAttributes.comboRate + 0.01 * qualityMultiplier,
-          counterRate: currentPet.combatAttributes.counterRate + 0.01 * qualityMultiplier,
-          stunRate: currentPet.combatAttributes.stunRate + 0.01 * qualityMultiplier,
-          dodgeRate: currentPet.combatAttributes.dodgeRate + 0.01 * qualityMultiplier,
-          vampireRate: currentPet.combatAttributes.vampireRate + 0.01 * qualityMultiplier,
-
-          critResist: currentPet.combatAttributes.critResist + 0.01 * qualityMultiplier, // 抗暴击
-          comboResist: currentPet.combatAttributes.comboResist + 0.01 * qualityMultiplier, // 抗连击
-          counterResist: currentPet.combatAttributes.counterResist + 0.01 * qualityMultiplier, // 抗反击
-          stunResist: currentPet.combatAttributes.stunResist + 0.01 * qualityMultiplier, // 抗眩晕
-          dodgeResist: currentPet.combatAttributes.dodgeResist + 0.01 * qualityMultiplier, // 抗闪避
-          vampireResist: currentPet.combatAttributes.vampireResist + 0.01 * qualityMultiplier, // 抗吸血
-
-          healBoost: currentPet.combatAttributes.healBoost + 0.01 * qualityMultiplier,
-          critDamageBoost: currentPet.combatAttributes.critDamageBoost + 0.01 * qualityMultiplier,
-          critDamageReduce: currentPet.combatAttributes.critDamageReduce + 0.01 * qualityMultiplier,
-          finalDamageBoost: currentPet.combatAttributes.finalDamageBoost + 0.01 * qualityMultiplier,
-          finalDamageReduce: currentPet.combatAttributes.finalDamageReduce + 0.01 * qualityMultiplier,
-          combatBoost: currentPet.combatAttributes.combatBoost + 0.01 * qualityMultiplier,
-          resistanceBoost: currentPet.combatAttributes.resistanceBoost + 0.01 * qualityMultiplier
-        }
-        // 如果是当前出战的灵宠，重新应用属性加成
-        if (this.activePet && this.activePet.id === pet.id) {
-          this.applyPetBonuses()
-        }
-      }
-      this.saveData()
+    },
+    upgradePet(target: Pet): ActionResult {
+      const pet = this.ownedPet(target.id)
+      if (!pet) return { success: false, message: '灵宠不存在' }
+      const cost = upgradeCost(pet)
+      if (this.petEssence < cost) return { success: false, message: '灵宠精华不足' }
+      this.petEssence -= cost
+      this.growPet(pet, pet.level + 1, pet.star)
+      void this.saveData()
       return { success: true, message: '升级成功' }
     },
-    // 升星灵宠
-    evolvePet(pet: Pet, foodPet: Pet): ActionResult {
-      // 检查是否是相同品质和名字的灵宠
-      if (pet.id === foodPet.id || this.activePet?.id === foodPet.id || pet.star !== foodPet.star || pet.rarity !== foodPet.rarity || pet.name !== foodPet.name) {
-        return { success: false, message: '只能使用相同品质和名字的灵宠进行升星' }
-      }
-      const petIndex = this.items.findIndex(item => item.id === pet.id)
-      const foodPetIndex = this.items.findIndex(item => item.id === foodPet.id)
-      if (petIndex > -1 && foodPetIndex > -1) {
-        // 返还作为升星材料的灵宠已消耗的精华
-        const returnEssence = (foodPet.level - 1) * 10 // 假设每级消耗10精华
-        this.petEssence += returnEssence
-        // 移除作为材料的灵宠
-        this.items.splice(foodPetIndex, 1)
-        // 提升目标灵宠星级
-        pet.star = (pet.star || 0) + 1
-        this.saveData()
-        return { success: true, message: '升星成功' }
-      }
-      return { success: false, message: '升星失败' }
+    transferPetTraining(sourceId: Pet['id'], targetId: Pet['id']): ActionResult {
+      const source = this.ownedPet(sourceId), target = this.ownedPet(targetId)
+      if (!source || !target || source.id === target.id || source.level <= 1)
+        return { success: false, message: '请选择另一只已升级的灵宠' }
+      const plan = transferPlan(source, target)
+      this.growPet(source, 1, source.star)
+      this.growPet(target, plan.level, target.star)
+      this.petEssence += plan.remainder
+      void this.saveData()
+      return { success: true, message: target.name + '已继承修为，达到 ' + plan.level + ' 级' }
+    },
+    evolvePet(target: Pet, material: Pet): ActionResult {
+      const pet = this.ownedPet(target.id), food = this.ownedPet(material.id)
+      if (!pet || !food || food.id === pet.id || food.id === this.activePet?.id || food.rarity !== pet.rarity)
+        return { success: false, message: '请选择同品质且未出战的材料灵宠' }
+      const next = starResult(pet, food)
+      const advanced = next.star > pet.star
+      this.items = this.items.filter(item => item.id !== food.id)
+      this.petEssence += investedEssence(food.level)
+      if (advanced) this.growPet(pet, pet.level, next.star)
+      pet.starProgress = next.progress
+      if (this.activePet?.id === pet.id) this.activePet = pet
+      void this.saveData()
+      return { success: true, message: advanced ? pet.name + '升至 ' + pet.star + ' 星' : '已增加升星进度' }
     }
   }
 })

@@ -1,4 +1,4 @@
-import type { Herb, PillEffect } from '../types/game'
+import type { ActiveEffect, Herb, PillEffect } from '../types/game'
 import { assert, assertFiniteNumber } from '../utils/assert'
 
 export type PillGrade = 'grade1' | 'grade2' | 'grade3' | 'grade4' | 'grade5' | 'grade6' | 'grade7' | 'grade8' | 'grade9'
@@ -36,9 +36,11 @@ const getFragmentsNeeded = (grade: PillGrade): number => {
 }
 
 // 丹方配置
+export const STARTER_RECIPE_ID = 'spirit_gathering'
+
 export const pillRecipes: PillRecipe[] = [
   {
-    id: 'spirit_gathering',
+    id: STARTER_RECIPE_ID,
     name: '聚灵丹',
     description: '提升灵力恢复速度的丹药',
     grade: 'grade1',
@@ -101,7 +103,7 @@ export const pillRecipes: PillRecipe[] = [
     fragmentsNeeded: getFragmentsNeeded('grade4'),
     baseEffect: {
       type: 'allAttributes',
-      value: 0.5,
+      value: 0.2,
       duration: 600
     }
   },
@@ -118,7 +120,7 @@ export const pillRecipes: PillRecipe[] = [
     fragmentsNeeded: getFragmentsNeeded('grade5'),
     baseEffect: {
       type: 'allAttributes',
-      value: 0.8,
+      value: 0.4,
       duration: 1200
     }
   },
@@ -249,13 +251,37 @@ export const calculatePillEffect = (recipe: PillRecipe, playerLevel: number): Pi
   const grade = pillGrades[recipe.grade]
   const type = pillTypes[recipe.type]
   // 基础效果随境界提升
-  const levelMultiplier = 1 + (playerLevel - 1) * 0.1
+  const levelMultiplier = 1 + Math.min(0.5, (playerLevel - 1) * 0.02)
   return {
     type: recipe.baseEffect.type,
     value: recipe.baseEffect.value * type.effectMultiplier * levelMultiplier,
     duration: recipe.baseEffect.duration,
     successRate: grade.successRate
   }
+}
+
+export const craftChance = (recipe: PillRecipe, multiplier: number) => Math.min(1, pillGrades[recipe.grade].successRate * multiplier)
+
+function effectFamily(type: string) {
+  if (type === 'spiritRecovery') return 'spiritRate'
+  if (type === 'cultivationEfficiency' || type === 'comprehension') return 'cultivationRate'
+  return type
+}
+
+export function mergePillEffects(effects: ActiveEffect[], now: number): ActiveEffect[] {
+  const groups = new Map<string, ActiveEffect>()
+  for (const effect of effects) {
+    if (effect.endTime <= now) continue
+    const family = effectFamily(effect.type)
+    const current = groups.get(family)
+    if (!current) groups.set(family, effect)
+    else {
+      const strongest = effect.value >= current.value ? effect : current
+      const remaining = (current.endTime - now) + (effect.endTime - now)
+      groups.set(family, { ...strongest, startTime: now, endTime: now + remaining, duration: remaining / 1000 })
+    }
+  }
+  return [...groups.values()]
 }
 
 // 尝试合成丹药
@@ -274,8 +300,7 @@ export const tryCreatePill = (recipe: PillRecipe, herbs: readonly Herb[], player
     return { success: false, message: '丹方不完整' }
   }
   // 计算成功率（受幸运值影响）
-  const grade = pillGrades[recipe.grade]
-  if (Math.random() > Math.min(1, grade.successRate * luck)) {
+  if (Math.random() >= craftChance(recipe, luck)) {
     return { success: false, message: '炼制失败' }
   }
   return { success: true, message: '炼制成功' }

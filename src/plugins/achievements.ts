@@ -6,21 +6,7 @@ export interface Achievement { id: string; name: string; description: string; co
 const getInventoryEquipment = (player: AchievementPlayer): Equipment[] => player.items.filter((item): item is Equipment => item.type !== 'pet' && item.type !== 'pill')
 const countHerbs = (herbs: Herb[]): number => herbs.reduce((count, herb) => count + (herb.count ?? 1), 0)
 
-const equipmentTypes = {
-  weapon: '武器',
-  head: '头部',
-  body: '衣服',
-  legs: '裤子',
-  feet: '鞋子',
-  shoulder: '肩甲',
-  hands: '手套',
-  wrist: '护腕',
-  necklace: '项链',
-  ring1: '戒指1',
-  ring2: '戒指2',
-  belt: '腰带',
-  artifact: '法宝'
-}
+import { equipmentSlots } from '../types/game'
 
 // 成就系统配置
 export const achievements: Record<string, Achievement[]> = {
@@ -80,7 +66,7 @@ export const achievements: Record<string, Achievement[]> = {
           ...(getInventoryEquipment(player) || [])
         ]
         const legendaryTypes = new Set(allEquipment.filter(e => e.quality === 'legendary').map(e => e.type))
-        return legendaryTypes.size >= 4
+        return legendaryTypes.size === equipmentSlots.length
       },
       reward: { spirit: 10000, damage: 2, defense: 2 }
     },
@@ -98,13 +84,13 @@ export const achievements: Record<string, Achievement[]> = {
     {
       id: 'equipment_7',
       name: '装备鉴赏家',
-      description: '拥有20件不同部位的装备',
+      description: '集齐八个部位的装备',
       condition: player => {
         const allEquipment = [
           ...Object.values(player.equippedArtifacts).filter(e => e !== null),
           ...(getInventoryEquipment(player) || [])
         ]
-        return new Set(allEquipment.map(e => e.type)).size >= 10
+        return new Set(allEquipment.map(e => e.type)).size === equipmentSlots.length
       },
       reward: { spirit: 2000 }
     },
@@ -140,7 +126,7 @@ export const achievements: Record<string, Achievement[]> = {
           ...(getInventoryEquipment(player) || [])
         ]
         const mythicTypes = new Set(allEquipment.filter(e => e.quality === 'mythic').map(e => e.type))
-        return mythicTypes.size >= Object.keys(equipmentTypes).length
+        return mythicTypes.size >= equipmentSlots.length
       },
       reward: { spirit: 50000, damage: 3, defense: 3 }
     }
@@ -740,42 +726,20 @@ export const achievements: Record<string, Achievement[]> = {
 }
 
 // 检查成就完成情况并发放奖励
-export const checkAchievements = (player: AchievementPlayer): Achievement[] => {
+export const checkAchievements = (player: AchievementPlayer, candidates = Object.values(achievements).flat()): Achievement[] => {
   const completedAchievements: Achievement[] = []
 
-  // 遍历所有成就类别
-  Object.values(achievements).forEach(category => {
-    category.forEach(achievement => {
-      // 检查成就是否已完成且未记录
-      if (achievement.condition(player) && !player.completedAchievements?.includes(achievement.id)) {
-        completedAchievements.push(achievement)
-        // 添加到已完成成就列表
-        if (!player.completedAchievements) {
-          player.completedAchievements = []
-        }
-        player.completedAchievements.push(achievement.id)
-        // 发放成就奖励
-        if (achievement.reward) {
-          if (achievement.reward.spirit) {
-            player.spirit += achievement.reward.spirit
-          }
-          if (achievement.reward.spiritRate) {
-            player.spiritRate *= achievement.reward.spiritRate
-          }
-          if (achievement.reward.herbRate) {
-            player.herbRate = (player.herbRate || 1) * achievement.reward.herbRate
-          }
-          if (achievement.reward.alchemyRate) {
-            player.alchemyRate = (player.alchemyRate || 1) * achievement.reward.alchemyRate
-          }
-          if (achievement.reward.luck) {
-            player.luck = (player.luck || 1) * achievement.reward.luck
-          }
-        }
-
-      }
-    })
-  })
+  for (const achievement of candidates) {
+    if (player.completedAchievements.includes(achievement.id) || !achievement.condition(player)) continue
+    player.completedAchievements.push(achievement.id)
+    completedAchievements.push(achievement)
+    const reward = achievement.reward
+    if (reward.spirit) player.spirit += reward.spirit
+    if (reward.spiritRate) player.spiritRate *= reward.spiritRate
+    if (reward.herbRate) player.herbRate = (player.herbRate || 1) * reward.herbRate
+    if (reward.alchemyRate) player.alchemyRate = (player.alchemyRate || 1) * reward.alchemyRate
+    if (reward.luck) player.luck = (player.luck || 1) * reward.luck
+  }
 
   if (completedAchievements.length > 0) void player.saveData()
   return completedAchievements

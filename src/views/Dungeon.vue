@@ -13,18 +13,41 @@
           />
           <n-button
             type="primary"
-            @click="startDungeon"
+            :class="{ 'guide-target': !playerStore.isNewPlayer && playerStore.journeyStage === 'trial' && !dungeonState.inCombat && !dungeonState.showingOptions && playerStore.dungeonDifficulty === 1 }"
+            @click="resumeOrStart"
             :disabled="dungeonState.inCombat || dungeonState.showingOptions"
           >
-            开始探索
+            {{ pausedFloor ? '继续第 ' + pausedFloor + ' 层' : '从第 1 层开始' }}
           </n-button>
+          <n-button v-if="floorData && !pausedFloor && !dungeonState.inCombat && !dungeonState.showingOptions" @click="startRecord">挑战第 {{ floorData + 1 }} 层</n-button>
+          <n-button v-if="pausedFloor || dungeonState.inCombat || dungeonState.showingOptions" @click="restart">从第 1 层重新探索</n-button>
         </n-space>
       </template>
-      <n-space vertical>
+      <div class="dungeon-body">
+        <DungeonIdlePanel />
+        <n-alert v-if="!dungeonState.inCombat && !dungeonState.showingOptions && lastBattle" :type="lastBattle.won ? 'success' : 'warning'" :title="'第 ' + lastBattle.floor + ' 层 · ' + (lastBattle.won ? '胜利' : '战败')" class="battle-report">
+          <p>{{ lastBattle.result }}</p>
+          <p>{{ lastBattle.settlement }}</p>
+          <p v-if="comparison" class="battle-comparison">{{ comparison }}</p>
+          <n-button v-if="canRetry" size="small" @click="$router.push('/character')">去角色调整装备</n-button>
+        </n-alert>
+        <p v-if="!dungeonState.inCombat" class="risk-note">{{ riskText }}</p>
         <!-- 层数显示 -->
-        <n-statistic label="当前层数" :value="dungeonState.floor" />
+        <span v-if="!dungeonState.inCombat && !dungeonState.showingOptions">本难度最高通关 {{ floorData }} 层</span>
         <!-- 选项界面 -->
-        <n-card v-if="dungeonState.showingOptions" title="选择增益">
+        <section v-if="draft.length">
+          <div v-for="group in draft" :key="group.floor">
+            <h3>第 {{ group.floor }} 层增益</h3>
+            <div class="option-cards">
+              <button v-for="option in group.options" :key="option.id" type="button" class="option-card"
+                :class="{ kept: group.selected === option.id }" :aria-pressed="group.selected === option.id" @click="group.selected = option.id">
+                <strong>{{ option.name }}</strong><p>{{ option.description }}</p>
+              </button>
+            </div>
+          </div>
+          <n-button type="primary" :disabled="draft.some(g => !g.selected)" @click="enterRecord">进入第 {{ dungeonState.floor }} 层</n-button>
+        </section>
+        <n-card v-else-if="dungeonState.showingOptions" :title="'第 ' + dungeonState.floor + ' 层 · 选择增益'">
           <template #header-extra>
             <n-space>
               <n-button type="primary" @click="handleRefreshOptions" :disabled="refreshNumber === 0">
@@ -38,67 +61,42 @@
               :key="option.id"
               class="option-card"
               :style="{ borderColor: getOptionColor(option.type).color }"
-              @click="selectOption(option)"
+              :class="{ kept: keptOption === option.id }"
             >
-              <div class="option-name">{{ option.name }}</div>
-              <div class="option-description">{{ option.description }}</div>
-              <div class="option-quality" :style="{ color: getOptionColor(option.type).color }">
+              <button type="button" class="choose-option" :aria-label="'选用' + option.name" @click="selectOption(option)">
+                <span class="option-name">{{ option.name }}</span>
+              <span class="option-description">{{ option.description }}</span>
+              <small>{{ optionPreviews[option.id] }}</small>
+              <span class="option-quality" :style="{ color: getOptionColor(option.type).color }">
                 {{ getOptionColor(option.type).name }}
-              </div>
+              </span>
+              </button>
+              <n-button v-if="refreshNumber > 0" size="small" :aria-pressed="keptOption === option.id"
+                @click="keptOption = keptOption === option.id ? '' : option.id">
+                {{ keptOption === option.id ? '取消保留' : '刷新时保留' }}
+              </n-button>
             </div>
           </div>
         </n-card>
         <!-- 战斗界面 -->
-        <template v-if="dungeonState.inCombat && dungeonState.combatManager">
-          <n-card :bordered="false">
-            <n-divider>
-              {{ dungeonState.combatManager.round }} / {{ dungeonState.combatManager.maxRounds }}回合
-            </n-divider>
-            <!-- 添加战斗场景 -->
-            <div class="combat-scene">
-              <div class="character player" :class="{ attack: playerAttacking, hurt: playerHurt }">
-                <div v-if="playerAttacking" class="attack-effect player-effect"></div>
-                <n-button class="character-name" type="info" dashed @click="infoCliclk('player')">
-                  {{ dungeonState.combatManager.player.name }}
-                </n-button>
-                <div class="character-avatar player-avatar">
-                  {{ dungeonState.combatManager.player.name[0] }}
-                </div>
-                <div class="health-bar">
-                  <div
-                    class="health-fill"
-                    :style="{
-                      width: `${
-                        (dungeonState.combatManager.player.currentHealth /
-                          dungeonState.combatManager.player.stats.maxHealth) *
-                        100
-                      }%`
-                    }"
-                  ></div>
-                </div>
+        <section v-else-if="dungeonState.inCombat && dungeonState.combatManager" class="battle-live" aria-label="当前战斗">
+          <h3>第 {{ dungeonState.floor }} 层 · 第 {{ dungeonState.combatManager.round }} / {{ dungeonState.combatManager.maxRounds }} 回合</h3>
+          <div class="combat-scene">
+            <div v-for="side in battleSides" :key="side" class="fighter" :class="side">
+              <div class="fighter-heading">
+                <n-button text @click="openFighterDetails(side)">{{ dungeonState.combatManager[side].name }}</n-button>
+                <span>气血 {{ Math.ceil(dungeonState.combatManager[side].currentHealth) }} / {{ Math.ceil(dungeonState.combatManager[side].stats.maxHealth) }}</span>
               </div>
-              <div class="character enemy" :class="{ attack: enemyAttacking, hurt: enemyHurt }">
-                <div v-if="enemyAttacking" class="attack-effect enemy-effect"></div>
-                <n-button class="character-name" type="error" dashed @click="infoCliclk('enemy')">
-                  {{ dungeonState.combatManager.enemy.name }}
-                </n-button>
-                <div class="character-avatar enemy-avatar">
-                  {{ dungeonState.combatManager.enemy.name[0] }}
-                </div>
-                <div class="health-bar">
-                  <div
-                    class="health-fill"
-                    :style="{
-                      width: `${
-                        (dungeonState.combatManager.enemy.currentHealth /
-                          dungeonState.combatManager.enemy.stats.maxHealth) *
-                        100
-                      }%`
-                    }"
-                  ></div>
-                </div>
-              </div>
+              <progress :aria-label="dungeonState.combatManager[side].name + '气血'" :value="dungeonState.combatManager[side].currentHealth" :max="dungeonState.combatManager[side].stats.maxHealth" />
+              <img :key="dungeonState.combatManager[side].currentHealth" class="combat-art"
+                :class="{ hit: dungeonState.combatManager[side].currentHealth < dungeonState.combatManager[side].stats.maxHealth }"
+                :src="side === 'player' ? '/art/swordsman.svg' : creatureArt(dungeonState.combatManager.enemy.name)" :alt="dungeonState.combatManager[side].name" />
             </div>
+          </div>
+          <details v-if="dungeonState.combatManager.log.length" class="combat-events">
+            <summary>战斗记录 · {{ dungeonState.combatManager.log.at(-1) }}</summary>
+            <ol><li v-for="(entry, i) in dungeonState.combatManager.log" :key="i">{{ entry }}</li></ol>
+          </details>
             <n-modal
               v-model:show="infoShow"
               preset="dialog"
@@ -279,55 +277,48 @@
                 </template>
               </n-card>
             </n-modal>
-            <!-- 战斗日志 -->
-            <log-panel ref="logRef" :messages="combatLog" style="margin-top: 16px" />
-          </n-card>
-        </template>
-      </n-space>
+        </section>
+      </div>
     </n-card>
   </div>
 </template>
 
+<script lang="ts">
+  import type { DungeonOption as RunOption } from '../plugins/dungeon'
+  interface DraftGroup { floor: number; options: RunOption[]; selected: string }
+  interface PausedRun {
+    floor: number; buffs: RunOption[]; options: RunOption[]; draft: DraftGroup[]; refreshes: number; kept: string
+  }
+  const pausedRuns = new Map<number, PausedRun>()
+</script>
 <script setup lang="ts">
+  import { creatureArt } from '../plugins/illustrations'
+  import { dungeonNames } from '../plugins/dungeon-idle'
+  import DungeonIdlePanel from '../components/DungeonIdlePanel.vue'
   import NumericValue from '../components/NumericValue.vue'
 
-  import { ref, onUnmounted } from 'vue'
+  import { ref, watch, onMounted, onUnmounted } from 'vue'
+  import { useRoute, useRouter } from 'vue-router'
   import type { DungeonOption, DungeonOptionQuality } from '../plugins/dungeon'
   import { usePlayerStore } from '../stores/player'
+  import { formatStatValue, getStatName } from '../plugins/stats'
   import { getRealmName } from '../plugins/realm'
+  import { describeBattle, compareBattles, highestFloorKey, recordBattle } from '../plugins/battle-report'
+  import { petTrait } from '../plugins/pet-growth'
   import { CombatManager, CombatEntity, generateEnemy, CombatType } from '../plugins/combat'
-  import type { LogEntry } from '../types/game'
   import { getRandomOptions } from '../plugins/dungeon'
-  import dungeonBuffs from '../plugins/dungeonBuffs'
   import { useMessage } from 'naive-ui'
-  import LogPanel from '../components/LogPanel.vue'
+  import { useGameNotices } from '../plugins/game-notices'
 
   const playerStore = usePlayerStore()
+  const notify = useGameNotices()
   const message = useMessage()
-  const logRef = ref<InstanceType<typeof LogPanel> | null>(null)
-  const playerAttacking = ref(false)
-  const playerHurt = ref(false)
-  const enemyAttacking = ref(false)
-  const enemyHurt = ref(false)
+  const battleSides = ['player', 'enemy'] as const
   const infoShow = ref(false)
   const infoType = ref<'player' | 'enemy' | ''>('')
 
-  const floorData = computed(() => {
-    switch (playerStore.dungeonDifficulty) {
-      case 1:
-        return playerStore.dungeonHighestFloor
-      case 2:
-        return playerStore.dungeonHighestFloor_2
-      case 5:
-        return playerStore.dungeonHighestFloor_5
-      case 10:
-        return playerStore.dungeonHighestFloor_10
-      case 100:
-        return playerStore.dungeonHighestFloor_100
-      default:
-        return playerStore.dungeonHighestFloor
-    }
-  })
+  const floorKey = computed(() => highestFloorKey(playerStore.dungeonDifficulty))
+  const floorData = computed(() => playerStore[floorKey.value])
 
   // 副本状态
   const dungeonState = ref<{floor:number; inCombat:boolean; showingOptions:boolean; currentOptions:DungeonOption[]; combatManager:CombatManager|null}>({
@@ -338,8 +329,35 @@
     combatManager: null
   })
 
-  // 当前战斗日志
-  const combatLog = ref<LogEntry[]>([])
+  watch(() => dungeonState.value.inCombat || dungeonState.value.showingOptions,
+    active => playerStore.setDungeonChallenge(active), { flush: 'sync' })
+  const reports = computed(() => playerStore.dungeonReports.filter(report => report.difficulty === playerStore.dungeonDifficulty))
+  const lastBattle = computed(() => reports.value[0])
+  const comparison = computed(() => compareBattles(lastBattle.value, reports.value[1]))
+  const canRetry = computed(() => !dungeonState.value.inCombat && !dungeonState.value.showingOptions &&
+    !!lastBattle.value && !lastBattle.value.won && lastBattle.value.floor === floorData.value + 1)
+  const buffs = ref<DungeonOption[]>([])
+  const draft = ref<DraftGroup[]>([])
+  const pausedFloor = ref(0)
+  const route = useRoute()
+  const router = useRouter()
+
+  const protectedFloor = (floor: number) => playerStore.dungeonDifficulty === 1 && floor <= 3
+  const riskText = computed(() => {
+    const floor = dungeonState.value.showingOptions ? dungeonState.value.floor : pausedFloor.value || 1
+    if (protectedFloor(floor)) return '入门试炼 · 简单前 3 层战败保留全部修为。'
+    return playerStore.dungeonDifficulty === 100 ? '战败会清空当前修为，并跌落 1～3 重境界。' : '战败会损失当前修为的 10%～50%。'
+  })
+
+  const saveReport = (combat: CombatManager, won: boolean, settlement: string) => {
+    const enemyRemaining = Math.ceil(100 * Math.min(1, Math.max(0, combat.enemy.currentHealth / combat.enemy.stats.maxHealth)))
+    playerStore.dungeonReports = recordBattle(playerStore.dungeonReports, {
+      difficulty: playerStore.dungeonDifficulty, floor: dungeonState.value.floor, won,
+      rounds: Math.min(combat.round, combat.maxRounds), enemyRemaining, result: describeBattle(combat), settlement
+    })
+    void playerStore.saveData()
+  }
+
   let mounted = true
   let animationTimer: ReturnType<typeof setTimeout> | undefined
   const optionColors: Record<DungeonOptionQuality, { name: string; color: string }> = { epic: { name: '史诗', color: '#e91e63' }, rare: { name: '稀有', color: '#2196f3' }, common: { name: '普通', color: '#4caf50' } }
@@ -386,20 +404,35 @@
     }
     const entity = new CombatEntity(playerStore.name, playerStore.level, baseStats, playerStore.realm)
     // 应用所有激活的增益效果
-    const activeBuffs = dungeonBuffs.getActiveBuffs()
+    const activeBuffs = buffs.value
     activeBuffs.forEach(buff => {
       if (typeof buff.effect === 'function') {
         buff.effect(entity)
       }
     })
+    entity.currentHealth = entity.stats.maxHealth
     return entity
   }
 
+  const optionPreviews = computed(() => Object.fromEntries(dungeonState.value.currentOptions.map(option => {
+    const entity = createPlayerEntity()
+    const before = { ...entity.stats }
+    option.effect(entity)
+    const changes = (Object.keys(before) as (keyof typeof before)[]).flatMap(stat => {
+      const a = before[stat], b = entity.stats[stat]
+      if (a === b || stat === 'health') return []
+      const key = stat === 'maxHealth' ? 'health' : stat === 'damage' ? 'attack' : stat
+      return [getStatName(key) + ' ' + formatStatValue(key, a) + ' → ' + formatStatValue(key, b)]
+    })
+    return [option.id, changes.join(' · ')]
+  })))
+
   // 开始新的副本
   const startDungeon = () => {
-    const startingFloor = floorData.value
+    if (dungeonState.value.inCombat || dungeonState.value.showingOptions) return
+    buffs.value = []
     dungeonState.value = {
-      floor: startingFloor,
+      floor: 0,
       inCombat: false,
       showingOptions: false,
       currentOptions: [],
@@ -407,6 +440,55 @@
     }
     playerStore.dungeonTotalRuns++ // 增加总探索次数
     nextFloor()
+  }
+
+  const restart = () => {
+    pausedRuns.delete(playerStore.dungeonDifficulty)
+    pausedFloor.value = 0
+    draft.value = []
+    infoShow.value = false
+    dungeonState.value.inCombat = dungeonState.value.showingOptions = false
+    startDungeon()
+  }
+  const startRecord = () => {
+    if (!floorData.value || dungeonState.value.inCombat || dungeonState.value.showingOptions) return
+    buffs.value = []
+    const floor = floorData.value + 1
+    dungeonState.value = { floor, inCombat: false, showingOptions: true, currentOptions: [], combatManager: null }
+    const floors = [1]
+    for (let n = 5; n <= floor; n += 5) floors.push(n)
+    draft.value = floors.map(n => ({ floor: n, options: getRandomOptions(n), selected: '' }))
+    playerStore.dungeonTotalRuns++
+  }
+  const enterRecord = () => {
+    if (!draft.value.length || draft.value.some(g => !g.selected)) return
+    buffs.value = draft.value.map(g => g.options.find(o => o.id === g.selected)!)
+    draft.value = []
+    dungeonState.value.showingOptions = false
+    startCombat()
+  }
+  const resumeOrStart = () => {
+    if (!pausedFloor.value) return startDungeon()
+    dungeonState.value.floor = pausedFloor.value
+    pausedFloor.value = 0
+    startCombat()
+  }
+  const restoreRun = () => {
+    const run = pausedRuns.get(playerStore.dungeonDifficulty)
+    buffs.value = run?.buffs ?? []
+    draft.value = run?.draft ?? []
+    const options = run?.options ?? []
+    const choosing = !!(options.length || draft.value.length)
+    dungeonState.value = { floor: run?.floor ?? 0, showingOptions: choosing, currentOptions: options, inCombat: false, combatManager: null }
+    pausedFloor.value = run && !choosing ? run.floor : 0
+    refreshNumber.value = run?.refreshes ?? 0
+    keptOption.value = run?.kept ?? ''
+  }
+  const rememberRun = () => {
+    if (!pausedFloor.value && !dungeonState.value.inCombat && !dungeonState.value.showingOptions) return
+    pausedRuns.set(playerStore.dungeonDifficulty, { floor: pausedFloor.value || dungeonState.value.floor,
+      buffs: buffs.value, options: dungeonState.value.showingOptions ? dungeonState.value.currentOptions : [],
+      draft: draft.value, refreshes: refreshNumber.value, kept: keptOption.value })
   }
 
   // 进入下一层
@@ -421,6 +503,7 @@
       const randRefres = Math.floor(Math.random() * 3) + 1
       message.success(`获得了${randRefres}刷新次数`)
       refreshNumber.value = randRefres
+      keptOption.value = ''
       showOptions()
       return
     }
@@ -435,7 +518,9 @@
 
   // 选择选项
   const selectOption = (option: DungeonOption) => {
-    dungeonBuffs.apply(playerStore, option)
+    if (!dungeonState.value.showingOptions) return
+    keptOption.value = ''
+    buffs.value.push(option)
     message.success(`选择了：${option.name}`)
     dungeonState.value.showingOptions = false
     dungeonState.value.currentOptions = []
@@ -443,32 +528,38 @@
   }
 
   // 处理失败
-  const handleDefeat = () => {
+  const handleDefeat = (combat: CombatManager) => {
+    let settlement: string
     dungeonState.value.inCombat = false
     infoShow.value = false
     infoType.value = ''
-    message.error(`在第 ${dungeonState.value.floor} 层被击败了...`)
     playerStore.dungeonDeathCount++
     // 清除所有临时增益效果
-    dungeonBuffs.clear(playerStore)
+    buffs.value = []
+    pausedRuns.delete(playerStore.dungeonDifficulty)
     // 记录失败层数
     playerStore.dungeonLastFailedFloor = dungeonState.value.floor
     // 随机跌落境界或修为
-    if (playerStore.dungeonDifficulty !== 100) {
+    if (protectedFloor(dungeonState.value.floor)) {
+      settlement = '入门试炼保护，本场保留全部修为。'
+    } else if (playerStore.dungeonDifficulty !== 100) {
       // 损失一定修为值作为惩罚
       const cultivationLossRate = Math.random() * 0.4 + 0.1 // 随机10%到50%
       const cultivationLoss = Math.floor(playerStore.cultivation * cultivationLossRate)
       playerStore.cultivation = Math.max(0, playerStore.cultivation - cultivationLoss)
-      message.error(`战斗失败！损失了${cultivationLoss}点修为。`)
+      settlement = cultivationLoss ? `本场损失 ${cultivationLoss} 修为。` : '本场修为损失为 0。'
     } else {
       // 跌落境界作为惩罚
       const randomGradeLoss = Math.floor(Math.random() * 3) + 1 // 随机损失1-3个境界
       const playerLevel = Math.max(1, playerStore.level - randomGradeLoss) // 降低境界
+      const dropped = playerStore.level - playerLevel
       playerStore.level = playerLevel
+      playerStore.realm = getRealmName(playerLevel).name
       playerStore.cultivation = 0 // 移除所有灵力
       playerStore.maxCultivation = getRealmName(playerLevel).maxCultivation // 降低所需最大灵力值
-      message.error(`战斗失败！跌落了${playerLevel}个境界。`)
+      settlement = dropped ? `跌落 ${dropped} 重，当前为${playerStore.realm}。` : '已在最低境界，本场修为清零。'
     }
+    saveReport(combat, false, settlement)
   }
 
   // 开始战斗
@@ -482,8 +573,8 @@
     // 创建敌人
     const enemy = generateEnemy(floor, enemyType, playerStore.dungeonDifficulty)
     // 创建战斗管理器
-    const combatManager = new CombatManager(playerEntity, enemy)
-    dungeonState.value.combatManager = combatManager
+    dungeonState.value.combatManager = new CombatManager(playerEntity, enemy, enemyType, petTrait(playerStore.activePet?.name ?? ''))
+    const combatManager = dungeonState.value.combatManager
     dungeonState.value.inCombat = true
     combatManager.start() // 初始化战斗状态
     void autoCombat(combatManager) // 开始自动战斗
@@ -494,71 +585,53 @@
     animationTimer = setTimeout(() => { animationTimer = undefined; resolve() }, ms)
   })
   const autoCombat = async (combatManager: CombatManager) => {
-    let displayedLogs = 0
     while (mounted && dungeonState.value.inCombat && dungeonState.value.combatManager === combatManager) {
       const result = combatManager.executeTurn()
       if (!result) break
-      const getCombatLog = combatManager.getCombatLog()
-      getCombatLog.slice(displayedLogs).forEach(item => logRef.value?.addLog('info', item))
-      displayedLogs = getCombatLog.length
-      // 添加动画效果
-      if (combatManager.player.stats.speed * (1 + combatManager.player.stats.combatBoost) >=
-        combatManager.enemy.stats.speed * (1 + combatManager.enemy.stats.combatBoost)) {
-        playerAttacking.value = true
-        enemyHurt.value = true
-        await pause(500)
-        if (!mounted || dungeonState.value.combatManager !== combatManager) return
-        playerAttacking.value = false
-        enemyHurt.value = false
-      } else {
-        enemyAttacking.value = true
-        playerHurt.value = true
-        await pause(500)
-        if (!mounted || dungeonState.value.combatManager !== combatManager) return
-        enemyAttacking.value = false
-        playerHurt.value = false
-      }
-      // 更新战斗日志
       // 检查战斗是否结束
       if (result.state === 'victory') {
-        handleVictory()
+        handleVictory(combatManager)
         break
       } else if (result.state === 'defeat') {
-        handleDefeat()
+        handleDefeat(combatManager)
         break
       }
       // 添加延迟使战斗动画更流畅
-      await pause(500)
+      await pause(950)
     }
   }
 
   // 处理胜利
-  const handleVictory = () => {
+  const handleVictory = (combat: CombatManager) => {
+    infoShow.value = false
+    const loot: string[] = []
     dungeonState.value.inCombat = false
-    message.success(`击败了第 ${dungeonState.value.floor} 层的敌人！`)
     // 更新统计数据
     playerStore.dungeonTotalKills++
-    if (dungeonState.value.floor % 10 === 0) {
-      playerStore.dungeonBossKills++
-    } else if (dungeonState.value.floor % 5 === 0) {
-      // 增加洗练石
-      playerStore.refinementStones += playerStore.dungeonDifficulty
-      playerStore.dungeonEliteKills++
-      message.success(`获得了${playerStore.dungeonDifficulty}颗洗练石`)
-    }
+    const { stones, bonus } = playerStore.rewardDungeonMilestone(dungeonState.value.floor)
+    if (stones) loot.push(`${stones} 洗练石`)
+    if (bonus) loot.push(`首次通关第 5 层额外获得 ${bonus} 洗练石`)
     // 更新最高层数记录
-    if (dungeonState.value.floor > playerStore.dungeonHighestFloor) {
-      playerStore.dungeonHighestFloor = dungeonState.value.floor
-    }
+    playerStore[floorKey.value] = Math.max(floorData.value, dungeonState.value.floor)
     // 获得奖励
     const rewards = generateRewards()
     rewards.forEach(reward => {
       playerStore.spiritStones += reward.amount
-      message.success(`获得了 ${reward.amount} 灵石！`)
+      loot.push(`${reward.amount} 灵石`)
       playerStore.dungeonTotalRewards++
     })
-    // 进入下一层
-    nextFloor()
+    const firstTrial = playerStore.dungeonDifficulty === 1 && dungeonState.value.floor === 1
+    if (firstTrial && playerStore.claimStarterAlchemy()) loot.push('聚灵丹方', '灵精草 ×2', '云雾花 ×1')
+    for (const reward of loot) notify('秘境奖励', reward)
+    saveReport(combat, true, '获得 ' + loot.join('、') + '。')
+    if (firstTrial) {
+      if (playerStore.journeyStage === 'trial') playerStore.journeyStage = 'done'
+      void playerStore.saveData()
+    }
+    if (firstTrial || (playerStore.dungeonDifficulty === 1 && dungeonState.value.floor === 3)) {
+      pausedFloor.value = dungeonState.value.floor + 1
+      rememberRun()
+    } else nextFloor()
   }
 
   // 生成奖励
@@ -573,55 +646,61 @@
     return rewards
   }
 
-  const infoCliclk = (type: 'player' | 'enemy') => {
+  const openFighterDetails = (type: 'player' | 'enemy') => {
     infoShow.value = true
     infoType.value = type
   }
 
-  const dungeonOptions = [
-    {
-      label: '简单',
-      value: 1
-    },
-    {
-      label: '普通',
-      value: 2
-    },
-    {
-      label: '困难',
-      value: 5
-    },
-    {
-      label: '地狱',
-      value: 10
-    },
-    {
-      label: '通天',
-      value: 100
-    }
-  ]
+  const dungeonOptions = Object.entries(dungeonNames).map(([value, label]) => ({ value: Number(value), label }))
 
   const handleUpdateValue = (value: number) => {
+    restoreRun()
     if (value === 100) {
       message.warning('警告! 通天难度挑战失败后会跌落境界')
     }
   }
   const refreshNumber = ref(3)
+  const keptOption = ref('')
   // 刷新选择
   const handleRefreshOptions = () => {
-    if (refreshNumber.value <= 0) return
-    showOptions()
+    if (refreshNumber.value <= 0 || !dungeonState.value.showingOptions) return
+    dungeonState.value.currentOptions = getRandomOptions(dungeonState.value.floor, dungeonState.value.currentOptions, keptOption.value)
     refreshNumber.value--
   }
+  onMounted(async () => {
+    if (!playerStore.dungeonTotalRuns) pausedRuns.clear()
+    restoreRun()
+    if (route.query.trial === '1') {
+      const ready = playerStore.dungeonDifficulty === 1 && floorData.value === 0
+      await router.replace({ path: '/dungeon' })
+      if (mounted && ready) startDungeon()
+      return
+    }
+    const { retryFloor, difficulty } = route.query
+    if (retryFloor === undefined) return
+    const matches = canRetry.value && String(lastBattle.value?.floor) === retryFloor &&
+      String(playerStore.dungeonDifficulty) === difficulty
+    await router.replace({ path: '/dungeon' })
+    if (mounted && matches && canRetry.value) {
+      if (floorData.value) startRecord()
+      else startDungeon()
+    }
+  })
+
   onUnmounted(() => {
     mounted = false
+    playerStore.setDungeonChallenge(false)
+    rememberRun()
     if (animationTimer) clearTimeout(animationTimer)
     dungeonState.value.inCombat = false
-    dungeonBuffs.clear(playerStore)
   })
 </script>
 
 <style scoped>
+  .combat-art { display:block; width:100%; height:116px; object-fit:contain; margin:4px auto 0; }
+  @media(prefers-reduced-motion:no-preference) { .combat-art.hit {animation:boar-hit .22s ease-out;} }
+  @keyframes boar-hit { 35% {transform:translateX(4px) rotate(1deg);} }
+  .battle-comparison { margin: 6px 0; font-weight: 600; }
   .dungeon-container {
     margin: 0 auto;
   }
@@ -648,9 +727,13 @@
   }
 
   .option-card:hover {
-    transform: translateX(5px);
+    transform: translateY(-1px);
     box-shadow: 4px 4px 12px rgba(0, 0, 0, 0.1);
   }
+
+  .choose-option { display: flex; flex: 1; flex-direction: column; gap: 6px; text-align: left; border: 0; padding: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+  .option-card > .n-button { align-self: flex-start; margin-top: 12px; }
+  .option-card.kept { outline: 2px solid currentColor; outline-offset: 2px; }
 
   .option-name {
     font-size: 1.3em;
@@ -678,172 +761,18 @@
     background: var(--n-color);
   }
 
-  .combat-scene {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 20px;
-    margin-bottom: 20px;
-    min-height: 200px;
-    background: rgba(0, 0, 0, 0.05);
-    border-radius: 8px;
-  }
-
-  .character {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    transition: transform 0.3s ease;
-  }
-
-  .character-avatar {
-    font-size: 48px;
-    margin: 10px 0;
-  }
-
-  .character-name {
-    font-weight: bold;
-    margin-bottom: 8px;
-  }
-
-  .health-bar {
-    width: 100px;
-    height: 10px;
-    background: #ff000033;
-    border-radius: 5px;
-    overflow: hidden;
-  }
-
-  .health-fill {
-    height: 100%;
-    background: #ff0000;
-    transition: width 0.3s ease;
-  }
-
-  .character.attack {
-    animation: attack 0.5s ease;
-  }
-
-  .character.hurt {
-    animation: hurt 0.5s ease;
-  }
-
-  .character-avatar {
-    width: 60px;
-    height: 60px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 24px;
-    font-weight: bold;
-    margin: 10px 0;
-    color: #fff;
-  }
-
-  .player-avatar {
-    background: linear-gradient(135deg, #4caf50, #2196f3);
-    border-radius: 12px;
-  }
-
-  .enemy-avatar {
-    background: linear-gradient(135deg, #ff5722, #e91e63);
-    clip-path: polygon(50% 0%, 100% 38%, 100% 100%, 0 100%, 0% 38%);
-  }
-
-  .attack-effect {
-    position: absolute;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    pointer-events: none;
-  }
-
-  .player-effect {
-    background: radial-gradient(circle, #4caf50, #2196f3);
-    animation: player-attack-effect 0.5s ease-out;
-    right: -10px;
-  }
-
-  .enemy-effect {
-    background: radial-gradient(circle, #ff5722, #e91e63);
-    animation: enemy-attack-effect 0.5s ease-out;
-    left: -10px;
-  }
-
-  .enemy.attack {
-    animation: enemy-attack 0.5s ease;
-  }
-
-  @keyframes player-attack-effect {
-    0% {
-      transform: scale(0.5) translateX(0);
-      opacity: 1;
-    }
-    100% {
-      transform: scale(1.5) translateX(200px);
-      opacity: 0;
-    }
-  }
-
-  @keyframes enemy-attack-effect {
-    0% {
-      transform: scale(0.5) translateX(0);
-      opacity: 1;
-    }
-    100% {
-      transform: scale(1.5) translateX(-200px);
-      opacity: 0;
-    }
-  }
-
-  @keyframes attack {
-    0% {
-      transform: translateX(0) rotate(0deg);
-    }
-    25% {
-      transform: translateX(20px) rotate(5deg);
-    }
-    50% {
-      transform: translateX(40px) rotate(0deg);
-    }
-    75% {
-      transform: translateX(20px) rotate(-5deg);
-    }
-    100% {
-      transform: translateX(0) rotate(0deg);
-    }
-  }
-
-  @keyframes hurt {
-    0% {
-      transform: translateX(0);
-    }
-    25% {
-      transform: translateX(-10px);
-    }
-    75% {
-      transform: translateX(10px);
-    }
-    100% {
-      transform: translateX(0);
-    }
-  }
-
-  @keyframes enemy-attack {
-    0% {
-      transform: translateX(0) rotate(0deg);
-    }
-    25% {
-      transform: translateX(-20px) rotate(-5deg);
-    }
-    50% {
-      transform: translateX(-40px) rotate(0deg);
-    }
-    75% {
-      transform: translateX(-20px) rotate(5deg);
-    }
-    100% {
-      transform: translateX(0) rotate(0deg);
-    }
-  }
+  .dungeon-body { display: grid; gap: 12px; }
+  .dungeon-body p { margin: 4px 0; }
+  .battle-live { padding: 12px 0; }
+  .battle-live h3 { margin: 0 0 12px; font-size: 16px; }
+  .combat-scene { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+  .fighter { padding: 12px 16px; border: 1px solid var(--n-border-color); border-radius: 6px; }
+  .fighter-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .fighter-heading button { font-weight: 600; }
+  .fighter-heading span { font-variant-numeric: tabular-nums; }
+  .fighter progress { display: block; width: 100%; height: 8px; margin-top: 10px; accent-color: #23916d; }
+  .enemy progress { accent-color: #bd5350; }
+  .combat-events { margin-top: 14px; }
+  .combat-events summary { cursor: pointer; }
+  .combat-events ol { max-height: 10rem; overflow-y: auto; }
 </style>

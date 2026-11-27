@@ -234,7 +234,7 @@ const roguelikeOptions: Record<DungeonOptionQuality, DungeonOption[]> = {
 }
 
 // 获取随机选项
-const getRandomOptions = (floor: number): DungeonOption[] => {
+const getRandomOptions = (floor: number, previous: DungeonOption[] = [], keepId = ''): DungeonOption[] => {
   // 基础概率设置
   let commonChance = 0.7
   let rareChance = 0.25
@@ -251,9 +251,10 @@ const getRandomOptions = (floor: number): DungeonOption[] => {
     rareChance = 0.35 // 提高稀有品质概率到35%
     epicChance = 0.15
   }
-  const count = 3
+  const keepAt = previous.findIndex(option => option.id === keepId)
+  const count = keepAt === -1 ? 3 : 2
   const selected: DungeonOption[] = []
-  const usedIds = new Set<string>()
+  const usedIds = new Set(previous.map(option => option.id))
   while (selected.length < count) {
     // 为每个选项独立随机决定品质
     const rand = Math.random()
@@ -283,6 +284,7 @@ const getRandomOptions = (floor: number): DungeonOption[] => {
       }
     }
   }
+  if (keepAt !== -1) selected.splice(keepAt, 0, previous[keepAt]!)
   return selected
 }
 

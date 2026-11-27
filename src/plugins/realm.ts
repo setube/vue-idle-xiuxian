@@ -2,9 +2,9 @@
 // prettier-ignore
 const realms = [
   // 练气期
-  { name: '练气一重', maxCultivation: 100 }, { name: '练气二重', maxCultivation: 200 },
-  { name: '练气三重', maxCultivation: 300 }, { name: '练气四重', maxCultivation: 400 },
-  { name: '练气五重', maxCultivation: 500 }, { name: '练气六重', maxCultivation: 600 },
+  { name: '练气一重', maxCultivation: 25 }, { name: '练气二重', maxCultivation: 61 },
+  { name: '练气三重', maxCultivation: 92 }, { name: '练气四重', maxCultivation: 122 },
+  { name: '练气五重', maxCultivation: 268 }, { name: '练气六重', maxCultivation: 294 },
   { name: '练气七重', maxCultivation: 700 }, { name: '练气八重', maxCultivation: 800 },
   { name: '练气九重', maxCultivation: 900 },
   // 筑基期
@@ -86,6 +86,18 @@ const realms = [
   { name: '大罗七重', maxCultivation: 120000000 }, { name: '大罗八重', maxCultivation: 130000000 },
   { name: '大罗九重', maxCultivation: 140000000 }
 ]
+
+export function realmGrowth(level: number, progress = 0) {
+  const completed = level - 1
+  const breakthroughs = completed + 3 * Math.floor(completed / 9)
+  // Keep the training earned in completed realms when cultivation resets at breakthrough.
+  const training = completed + (level < realms.length ? Math.max(0, Math.min(1, progress)) : 0)
+  return {
+    attack: training + 3 * breakthroughs,
+    defense: training + 2 * breakthroughs,
+    health: 5 * training + 20 * breakthroughs
+  }
+}
 
 // 获取境界名称
 export const getRealmName = (level: number) => {

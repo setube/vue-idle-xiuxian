@@ -9,7 +9,7 @@
       <n-card :bordered="false">
         <div class="gacha-container">
           <div class="gacha-type-selector">
-            <n-radio-group v-model:value="gachaType" name="gachaType">
+            <n-radio-group v-model:value="gachaType" name="gachaType" :disabled="isDrawing">
               <n-radio-button value="all">综合池</n-radio-button>
               <n-radio-button value="equipment">装备池</n-radio-button>
               <n-radio-button value="pet">灵宠池</n-radio-button>
@@ -38,28 +38,28 @@
                   :key="index"
                   @click="performGacha(item)"
                   :disabled="
-                    playerStore.spiritStones < (playerStore.wishlistEnabled ? item * 200 : item * 100) || isDrawing
+                    playerStore.spiritStones < (item * drawPrice) || isDrawing
                   "
                 >
-                  抽{{ item }}次 ({{ playerStore.wishlistEnabled ? item * 200 : item * 100 }}灵石)
+                  抽{{ item }}次 ({{ item * drawPrice }}灵石)
                 </n-button>
               </n-space>
               <n-space justify="center">
-                <n-button quaternary circle size="small" @click="showProbabilityInfo = true">
+                <n-button quaternary circle size="small" aria-label="抽卡概率说明" title="抽卡概率说明" @click="showProbabilityInfo = true">
                   <template #icon>
                     <n-icon>
                       <Help />
                     </n-icon>
                   </template>
                 </n-button>
-                <n-button quaternary circle size="small" @click="showWishlistSettings = true">
+                <n-button quaternary circle size="small" aria-label="心愿单设置" title="心愿单设置" @click="showWishlistSettings = true">
                   <template #icon>
                     <n-icon>
                       <HeartOutline />
                     </n-icon>
                   </template>
                 </n-button>
-                <n-button quaternary circle size="small" @click="showAutoSettings = true">
+                <n-button quaternary circle size="small" aria-label="自动处理设置" title="自动处理设置" @click="showAutoSettings = true">
                   <template #icon>
                     <n-icon>
                       <SettingsOutline />
@@ -70,6 +70,7 @@
             </n-space>
           </div>
           <!-- 抽卡结果弹窗 -->
+          <n-button v-if="gachaResult?.length" text @click="showResult = true">查看上次抽取</n-button>
           <n-modal
             v-model:show="showResult"
             preset="dialog"
@@ -105,11 +106,11 @@
                   type="primary"
                   @click="performGacha(gachaNumber)"
                   :disabled="
-                    playerStore.spiritStones < (playerStore.wishlistEnabled ? gachaNumber * 200 : gachaNumber * 100) ||
+                    playerStore.spiritStones < (gachaNumber * drawPrice) ||
                     isDrawing
                   "
                 >
-                  再抽<NumericValue :value="gachaNumber" />次 (<NumericValue :value="playerStore.wishlistEnabled ? gachaNumber * 200 : gachaNumber * 100" />灵石)
+                  再抽<NumericValue :value="gachaNumber" />次 (<NumericValue :value="gachaNumber * drawPrice" />灵石)
                 </n-button>
               </n-space>
               <div class="result-grid">
@@ -129,10 +130,21 @@
                     borderColor: getItemBorderColor(item)
                   }"
                 >
+                  <img v-if="item.type === 'pet'" :src="creatureArt(item.name)" width="72" height="72" alt="" /><GearGlyph v-else-if="item.type !== 'pill'" :slot-type="item.type" :item-id="item.id" />
                   <h4>{{ item.name }}</h4>
-                  <p>品质：{{ getItemQualityName(item) }}</p>
-                  <p v-if="item.type !== 'pet' && item.type !== 'pill'">类型：{{ equipmentTypes[item.type].name }}</p>
-                  <p v-else-if="item.type === 'pet'">{{ item.description || '暂无描述' }}</p>
+                  <EquipmentQualityBadge v-if="item.type !== 'pet' && item.type !== 'pill'" :item="item" />
+                  <p v-else-if="item.type === 'pet'">灵宠品质：{{ isPetRarity(item.rarity) ? petRarities[item.rarity].name : '未知' }}</p>
+                  <template v-if="item.type !== 'pet' && item.type !== 'pill'">
+                    <p v-if="autoSoldIds.has(item.id)">已自动出售</p>
+                    <p v-else-if="playerStore.equippedArtifacts[item.type]?.id === item.id">已穿戴</p>
+                    <template v-else>
+                      <EquipmentComparison :candidate="item" :current="playerStore.equippedArtifacts[item.type]" />
+                      <n-button size="small" :disabled="playerStore.level < (item.requiredRealm ?? 1)" @click="wearDrawnItem(item)">
+                        {{ playerStore.level < (item.requiredRealm ?? 1) ? '境界不足' : '穿戴' }}
+                      </n-button>
+                    </template>
+                  </template>
+                  <p v-else-if="item.type === 'pet'">抽取 +{{ playerStore.petEssenceYield(item).draw }} 精华 · {{ autoReleasedIds.has(item.id) ? '已放生 +' : '放生可得 ' }}{{ playerStore.petEssenceYield(item).release }} 精华</p>
                 </div>
               </div>
               <template #footer>
@@ -186,7 +198,7 @@
                     <n-divider>装备品质概率</n-divider>
                     <div class="probability-bars">
                       <div
-                        v-for="(probability, quality) in getAllPoolProbabilities(playerStore.level || 1).equipment"
+                        v-for="(probability, quality) in poolOdds.all.equipment"
                         :key="quality"
                         class="prob-item"
                       >
@@ -198,13 +210,13 @@
                         <n-progress
                           type="line"
                           :percentage="probability * 100"
-                          indicator-placement="inside"
+                          indicator-placement="outside"
                           :color="equipmentQualities[quality].color"
                           :height="20"
                           :border-radius="4"
                           :show-indicator="true"
                         >
-                          <template #indicator><NumericValue :value="(probability * 100).toFixed(1)" />%</template>
+                          <template #indicator><NumericValue :value="Number((probability * 100).toFixed(3))" />%</template>
                         </n-progress>
                       </div>
                     </div>
@@ -212,7 +224,7 @@
                     <n-divider>灵宠品质概率</n-divider>
                     <div class="probability-bars">
                       <div
-                        v-for="(probability, rarity) in getAllPoolProbabilities(playerStore.level || 1).pet"
+                        v-for="(probability, rarity) in poolOdds.all.pet"
                         :key="rarity"
                         class="prob-item"
                       >
@@ -224,13 +236,13 @@
                         <n-progress
                           type="line"
                           :percentage="probability * 100"
-                          :indicator-placement="'inside'"
+                          indicator-placement="outside"
                           :color="petRarities[rarity].color"
                           :height="20"
                           :border-radius="4"
                           :show-indicator="true"
                         >
-                          <template #indicator><NumericValue :value="(probability * 100).toFixed(1)" />%</template>
+                          <template #indicator><NumericValue :value="Number((probability * 100).toFixed(3))" />%</template>
                         </n-progress>
                       </div>
                     </div>
@@ -242,7 +254,7 @@
                 <n-card>
                   <div class="probability-bars">
                     <div
-                      v-for="(probability, quality) in getAdjustedEquipProbabilities()"
+                      v-for="(probability, quality) in poolOdds.equipment.equipment"
                       :key="quality"
                       class="prob-item"
                     >
@@ -254,7 +266,7 @@
                       <n-progress
                         type="line"
                         :percentage="probability * 100"
-                        :indicator-placement="'inside'"
+                        indicator-placement="outside"
                         :color="equipmentQualities[quality].color"
                         :height="20"
                         :border-radius="4"
@@ -263,7 +275,7 @@
                         }"
                         :show-indicator="true"
                       >
-                        <template #indicator><NumericValue :value="(probability * 100).toFixed(1)" />%</template>
+                        <template #indicator><NumericValue :value="Number((probability * 100).toFixed(3))" />%</template>
                       </n-progress>
                     </div>
                   </div>
@@ -273,7 +285,7 @@
               <n-tab-pane name="pet" tab="灵宠池">
                 <n-card>
                   <div class="probability-bars">
-                    <div v-for="(probability, rarity) in getAdjustedPetProbabilities()" :key="rarity" class="prob-item">
+                    <div v-for="(probability, rarity) in poolOdds.pet.pet" :key="rarity" class="prob-item">
                       <div class="prob-label">
                         <span :style="{ color: petRarities[rarity].color }">
                           {{ petRarities[rarity].name }}
@@ -282,7 +294,7 @@
                       <n-progress
                         type="line"
                         :percentage="probability * 100"
-                        :indicator-placement="'inside'"
+                        indicator-placement="outside"
                         :class="{
                           'wish-bonus': playerStore.wishlistEnabled && playerStore.selectedWishPetRarity === rarity
                         }"
@@ -291,7 +303,7 @@
                         :border-radius="4"
                         :show-indicator="true"
                       >
-                        <template #indicator><NumericValue :value="(probability * 100).toFixed(1)" />%</template>
+                        <template #indicator><NumericValue :value="Number((probability * 100).toFixed(3))" />%</template>
                       </n-progress>
                     </div>
                   </div>
@@ -326,7 +338,7 @@
                 >
                 </n-select>
                 <n-alert type="info" title="心愿单说明">
-                  启用心愿单后，所需灵石会翻倍,
+                  当前卡池有已选心愿时，每抽消耗 200 灵石，其余情况每抽 100 灵石。
                   选中的品质将根据其基础概率获得不同程度的概率提升（基础概率越低，提升越高）。每次只能选择一个装备品质和一个灵宠品质作为心愿。
                 </n-alert>
               </n-space>
@@ -335,51 +347,8 @@
           <n-modal v-model:show="showAutoSettings" preset="dialog" title="自动处理设置" style="width: 800px">
             <n-card :bordered="false">
               <n-space vertical>
-                <n-divider>装备自动出售</n-divider>
-                <n-checkbox-group v-model:value="playerStore.autoSellQualities" @update:value="handleAutoSellChange">
-                  <n-space wrap>
-                    <n-checkbox
-                      value="all"
-                      :disabled="
-                        !!playerStore.autoSellQualities?.length && !playerStore.autoSellQualities.includes('all')
-                      "
-                    >
-                      全部品阶
-                    </n-checkbox>
-                    <n-checkbox
-                      v-for="(quality, key) in equipmentQualities"
-                      :key="key"
-                      :value="key"
-                      :disabled="playerStore.autoSellQualities?.includes('all')"
-                    >
-                      <span :style="{ color: quality.color }">{{ quality.name }}</span>
-                    </n-checkbox>
-                  </n-space>
-                </n-checkbox-group>
-                <n-divider>灵宠自动放生</n-divider>
-                <n-checkbox-group
-                  v-model:value="playerStore.autoReleaseRarities"
-                  @update:value="handleAutoReleaseChange"
-                >
-                  <n-space wrap>
-                    <n-checkbox
-                      value="all"
-                      :disabled="
-                        !!playerStore.autoReleaseRarities?.length && !playerStore.autoReleaseRarities.includes('all')
-                      "
-                    >
-                      全部品质
-                    </n-checkbox>
-                    <n-checkbox
-                      v-for="(rarity, key) in petRarities"
-                      :key="key"
-                      :value="key"
-                      :disabled="playerStore.autoReleaseRarities?.includes('all')"
-                    >
-                      <span :style="{ color: rarity.color }">{{ rarity.name }}</span>
-                    </n-checkbox>
-                  </n-space>
-                </n-checkbox-group>
+                <AutoLootSettings kind="gear" expanded />
+                <AutoLootSettings kind="pet" expanded />
               </n-space>
             </n-card>
             <template #footer>
@@ -395,6 +364,14 @@
 </template>
 
 <script setup lang="ts">
+  import AutoLootSettings from '../components/AutoLootSettings.vue'
+  import { stonePrices } from '../plugins/equipment-prices' 
+  import { creatureArt } from '../plugins/illustrations'
+  import GearGlyph from '../components/GearGlyph.vue'
+  import { rollEquipmentStats } from '../plugins/equipment-stats'
+  import EquipmentComparison from '../components/EquipmentComparison.vue'
+  import EquipmentQualityBadge from '../components/EquipmentQualityBadge.vue'
+  import { equipmentQualities, isEquipmentQuality } from '../plugins/equipment-quality'
   import NumericValue from '../components/NumericValue.vue'
 
   import { usePlayerStore } from '../stores/player'
@@ -403,24 +380,34 @@
   import { Help, HeartOutline, SettingsOutline } from '@vicons/ionicons5'
   import type { Equipment, EquipmentQuality, EquipmentSlot, GameItem, Pet, PetRarity, Stats } from '../types/game'
 
-  type GachaType = 'all' | 'equipment' | 'pet'
+  import { getGachaOdds, rollGacha, type GachaPool } from '../plugins/gacha'
   type PetTemplate = Pick<Pet, 'name' | 'description'>
-  type QualityConfig = { name: string; color: string; statMod: number; maxStatMod: number }
+
   type EquipmentTypeConfig = { name: string; slot: EquipmentSlot; prefixes: string[] }
-  type PetRarityConfig = { name: string; color: string; probability: number; essenceBonus: number }
-  type StatRange = { name: string; min: number; max: number }
+  type PetRarityConfig = { name: string; color: string }
   type PetStatRange = { min: number; max: number; isPercentage?: boolean; useBase?: boolean; multiplier?: number }
   type RarityMultiplier = { base: number; percent: number }
 
+  import { isPet } from '../plugins/companion-ranking'
   const playerStore = usePlayerStore()
+  import { useGameNotices } from '../plugins/game-notices'
+  const notify = useGameNotices()
   const message = useMessage()
 
   // 抽卡类型
-  const gachaType = ref<GachaType>('all') // 'equipment'、'pet' 或 'all'
+  const gachaType = ref<GachaPool>('all') // 'equipment'、'pet' 或 'all'
   // 抽卡动画状态
   const isShaking = ref(false)
   const isOpening = ref(false)
   const showResult = ref(false)
+  const autoSoldIds = ref(new Set<GameItem['id']>())
+  const wearDrawnItem = (item: Equipment) => {
+    const owned = playerStore.items.find(candidate => candidate.id === item.id)
+    if (!owned || owned.type === 'pet' || owned.type === 'pill') return
+    const result = playerStore.equipArtifact(owned, owned.type)
+    if (result.success) message.success('已穿戴' + owned.name)
+    else message.error(result.message)
+  }
   const gachaResult = ref<GameItem[] | null>(null)
   const showProbabilityInfo = ref(false)
   const isDrawing = ref(false)
@@ -430,27 +417,9 @@
   const pageSize = ref(12)
   const selectedQuality = ref<EquipmentQuality | 'all' | null>('all') // 选中的装备品质
   const selectedRarity = ref<PetRarity | 'all' | null>('all') // 选中的灵宠品质
-  const autoReleasedCount = ref(0) // 自动放生灵宠次数
-  const autoSoldIncome = ref(0) // 自动出售装备获得的强化石数量
-  const autoSoldCount = ref(0) // 自动出售装备的数量
+  const autoReleasedIds = ref(new Set<Pet['id']>())
   const showAutoSettings = ref(false) // 自动设置开关
   const showWishlistSettings = ref(false) // 心愿单弹窗
-
-  // 心愿单概率提升配置
-  const wishlistBonus = {
-    equipment: (quality: EquipmentQuality) => Math.min(1.0, 0.2 / getEquipProbabilities[quality]),
-    pet: (rarity: PetRarity) => Math.min(1.0, 0.2 / petRarities[rarity].probability)
-  }
-
-  // 装备品质
-  const equipmentQualities = {
-    common: { name: '凡品', color: '#9e9e9e', statMod: 1.0, maxStatMod: 1.5 },
-    uncommon: { name: '下品', color: '#4caf50', statMod: 1.2, maxStatMod: 2.0 },
-    rare: { name: '中品', color: '#2196f3', statMod: 1.5, maxStatMod: 2.5 },
-    epic: { name: '上品', color: '#9c27b0', statMod: 2.0, maxStatMod: 3.0 },
-    legendary: { name: '极品', color: '#ff9800', statMod: 2.5, maxStatMod: 3.5 },
-    mythic: { name: '仙品', color: '#e91e63', statMod: 3.0, maxStatMod: 4.0 }
-  } satisfies Record<EquipmentQuality, QualityConfig>
 
   // 装备类型
   const equipmentTypes: Record<EquipmentSlot, EquipmentTypeConfig> = {
@@ -459,25 +428,16 @@
       slot: 'weapon',
       prefixes: ['九天', '太虚', '混沌', '玄天', '紫霄', '青冥', '赤炎', '幽冥']
     },
-    head: { name: '头部', slot: 'head', prefixes: ['天灵', '玄冥', '紫金', '青玉', '赤霞', '幽月', '星辰', '云霄'] },
-    body: { name: '衣服', slot: 'body', prefixes: ['九霄', '太素', '混元', '玄阳', '紫薇', '青龙', '赤凤', '幽冥'] },
-    legs: { name: '裤子', slot: 'legs', prefixes: ['天罡', '玄武', '紫电', '青云', '赤阳', '幽灵', '星光', '云雾'] },
-    feet: { name: '鞋子', slot: 'feet', prefixes: ['天行', '玄风', '紫霞', '青莲', '赤焰', '幽影', '星步', '云踪'] },
-    shoulder: {
-      name: '肩甲',
-      slot: 'shoulder',
-      prefixes: ['天护', '玄甲', '紫雷', '青锋', '赤羽', '幽岚', '星芒', '云甲']
-    },
-    hands: { name: '手套', slot: 'hands', prefixes: ['天罗', '玄玉', '紫晶', '青钢', '赤金', '幽银', '星铁', '云纹'] },
+    head: { name: '头冠', slot: 'head', prefixes: ['天灵', '玄冥', '紫金', '青玉', '赤霞', '幽月', '星辰', '云霄'] },
+    body: { name: '衣甲', slot: 'body', prefixes: ['九霄', '太素', '混元', '玄阳', '紫薇', '青龙', '赤凤', '幽冥'] },
+    feet: { name: '鞋履', slot: 'feet', prefixes: ['天行', '玄风', '紫霞', '青莲', '赤焰', '幽影', '星步', '云踪'] },
     wrist: { name: '护腕', slot: 'wrist', prefixes: ['天绝', '玄铁', '紫玉', '青石', '赤铜', '幽钢', '星晶', '云纱'] },
     necklace: {
       name: '项链',
       slot: 'necklace',
       prefixes: ['天珠', '玄圣', '紫灵', '青魂', '赤心', '幽魄', '星魂', '云珠']
     },
-    ring1: { name: '戒指1', slot: 'ring1', prefixes: ['天命', '玄命', '紫命', '青命', '赤命', '幽命', '星命', '云命'] },
-    ring2: { name: '戒指2', slot: 'ring2', prefixes: ['天道', '玄道', '紫道', '青道', '赤道', '幽道', '星道', '云道'] },
-    belt: { name: '腰带', slot: 'belt', prefixes: ['天系', '玄系', '紫系', '青系', '赤系', '幽系', '星系', '云系'] },
+    ring: { name: '戒指', slot: 'ring', prefixes: ['天命', '玄命', '紫命', '青命', '赤命', '幽命', '星命', '云命'] },
     artifact: {
       name: '法宝',
       slot: 'artifact',
@@ -485,63 +445,18 @@
     }
   }
 
-  const equipmentQualityKeys = Object.keys(equipmentQualities) as EquipmentQuality[]
-  const isEquipmentQuality = (value: string): value is EquipmentQuality => equipmentQualityKeys.includes(value as EquipmentQuality)
 
-  const equipmentTypes2: EquipmentSlot[] = [
-    'weapon',
-    'head',
-    'body',
-    'legs',
-    'feet',
-    'shoulder',
-    'hands',
-    'wrist',
-    'necklace',
-    'ring1',
-    'ring2',
-    'belt',
-    'artifact'
-  ]
+  import { equipmentSlots } from '../types/game'
 
   // 生成随机装备
-  const generateEquipment = (level: number, type: EquipmentSlot | null = null, quality: EquipmentQuality | null = null): Equipment => {
-    // 随机选择装备类型和品质，使用固定概率
-    const selectedType = type ?? equipmentTypes2[Math.floor(Math.random() * equipmentTypes2.length)]!
-    let selectedQuality = quality
-    if (!selectedQuality) {
-      const roll = Math.random()
-      if (roll < 0.35) selectedQuality = 'common'
-      else if (roll < 0.65) selectedQuality = 'uncommon'
-      else if (roll < 0.82) selectedQuality = 'rare'
-      else if (roll < 0.93) selectedQuality = 'epic'
-      else if (roll < 0.98) selectedQuality = 'legendary'
-      else selectedQuality = 'mythic'
-    }
-    const selectedEquipmentQuality = selectedQuality
+  const generateEquipment = (level: number, selectedEquipmentQuality: EquipmentQuality): Equipment => {
+    const selectedType = equipmentSlots[Math.floor(Math.random() * equipmentSlots.length)]!
     // 随机生成装备等级（1到玩家当前等级之间）
     const randomLevel = Math.floor(Math.random() * level) + 1
-    // 基础属性计算
-    const baseStats: Stats = {}
-    const qualityMod = equipmentQualities[selectedEquipmentQuality].statMod
-    const levelMod = 1 + randomLevel * 0.1
-    Object.entries(equipmentBaseStats[selectedType]).forEach(([stat, config]) => {
-      const base = config.min + Math.random() * (config.max - config.min)
-      const value = base * qualityMod * levelMod
-      // 对百分比属性进行特殊处理
-      if (
-        ['critRate', 'critDamageBoost', 'dodgeRate', 'vampireRate', 'finalDamageBoost', 'finalDamageReduce'].includes(
-          stat
-        )
-      ) {
-        baseStats[stat] = Math.round(value * 1) / 100 // 保留两位小数
-      } else {
-        baseStats[stat] = Math.round(value)
-      }
-    })
+    const baseStats = rollEquipmentStats(selectedType, selectedEquipmentQuality, randomLevel)
     return {
-      id: Date.now() + Math.random(),
-      name: generateEquipmentName(selectedType, selectedEquipmentQuality),
+      id: crypto.getRandomValues(new Uint32Array(4)).join('-'),
+      name: generateEquipmentName(selectedType, baseStats),
       type: selectedType,
       slot: selectedType,
       quality: selectedEquipmentQuality,
@@ -553,125 +468,34 @@
     }
   }
   // 生成装备名称
-  const generateEquipmentName = (type: EquipmentSlot, quality: EquipmentQuality): string => {
+  const generateEquipmentName = (type: EquipmentSlot, stats: Stats): string => {
     const typeInfo = equipmentTypes[type]
     const prefix = typeInfo.prefixes[Math.floor(Math.random() * typeInfo.prefixes.length)]
-    const suffixes = ['', '·真', '·极', '·道', '·天', '·仙', '·圣', '·神']
-    const suffix =
-      quality === 'mythic'
-        ? suffixes[7]
-        : quality === 'legendary'
-        ? suffixes[6]
-        : quality === 'epic'
-        ? suffixes[5]
-        : quality === 'rare'
-        ? suffixes[4]
-        : quality === 'uncommon'
-        ? suffixes[3]
-        : suffixes[0]
-    return `${prefix}${typeInfo.name}${suffix}`
+    if (type === 'ring') return prefix + ('attack' in stats ? '破阵戒' : '镇守戒')
+    return prefix + typeInfo.name
   }
-
-  // 装备基础属性
-  const equipmentBaseStats = {
-    weapon: {
-      attack: { name: '攻击', min: 10, max: 20 },
-      critRate: { name: '暴击率', min: 0.05, max: 0.1 },
-      critDamageBoost: { name: '暴击伤害', min: 0.1, max: 0.3 }
-    },
-    head: {
-      defense: { name: '防御', min: 5, max: 10 },
-      health: { name: '生命', min: 50, max: 100 },
-      stunResist: { name: '抗眩晕', min: 0.05, max: 0.1 }
-    },
-    body: {
-      defense: { name: '防御', min: 8, max: 15 },
-      health: { name: '生命', min: 80, max: 150 },
-      finalDamageReduce: { name: '最终减伤', min: 0.05, max: 0.1 }
-    },
-    legs: {
-      defense: { name: '防御', min: 6, max: 12 },
-      speed: { name: '速度', min: 5, max: 10 },
-      dodgeRate: { name: '闪避率', min: 0.05, max: 0.1 }
-    },
-    feet: {
-      defense: { name: '防御', min: 4, max: 8 },
-      speed: { name: '速度', min: 8, max: 15 },
-      dodgeRate: { name: '闪避率', min: 0.05, max: 0.1 }
-    },
-    shoulder: {
-      defense: { name: '防御', min: 5, max: 10 },
-      health: { name: '生命', min: 40, max: 80 },
-      counterRate: { name: '反击率', min: 0.05, max: 0.1 }
-    },
-    hands: {
-      attack: { name: '攻击', min: 5, max: 10 },
-      critRate: { name: '暴击率', min: 0.03, max: 0.08 },
-      comboRate: { name: '连击率', min: 0.05, max: 0.1 }
-    },
-    wrist: {
-      defense: { name: '防御', min: 3, max: 8 },
-      counterRate: { name: '反击率', min: 0.05, max: 0.1 },
-      vampireRate: { name: '吸血率', min: 0.05, max: 0.1 }
-    },
-    necklace: {
-      health: { name: '生命', min: 60, max: 120 },
-      healBoost: { name: '强化治疗', min: 0.1, max: 0.2 },
-      spiritRate: { name: '灵力获取', min: 0.1, max: 0.2 }
-    },
-    ring1: {
-      attack: { name: '攻击', min: 5, max: 10 },
-      critDamageBoost: { name: '暴击伤害', min: 0.1, max: 0.2 },
-      finalDamageBoost: { name: '最终增伤', min: 0.05, max: 0.1 }
-    },
-    ring2: {
-      defense: { name: '防御', min: 5, max: 10 },
-      critDamageReduce: { name: '爆伤减免', min: 0.1, max: 0.2 },
-      resistanceBoost: { name: '抗性提升', min: 0.05, max: 0.1 }
-    },
-    belt: {
-      health: { name: '生命', min: 40, max: 80 },
-      defense: { name: '防御', min: 4, max: 8 },
-      combatBoost: { name: '战斗属性', min: 0.05, max: 0.1 }
-    },
-    artifact: {
-      attack: { name: '攻击力', min: 0.1, max: 0.3 },
-      critRate: { name: '暴击率', min: 0.1, max: 0.3 },
-      comboRate: { name: '连击率', min: 0.1, max: 0.3 }
-    }
-  } satisfies Record<EquipmentSlot, Record<string, StatRange>>
 
   // 灵宠品质配置
   const petRarities = {
     divine: {
       name: '神品',
-      color: '#FF0000',
-      probability: 0.002,
-      essenceBonus: 50
+      color: '#FF0000'
     },
     celestial: {
       name: '仙品',
-      color: '#FFD700',
-      probability: 0.0581,
-      essenceBonus: 30
+      color: '#FFD700'
     },
     mystic: {
       name: '玄品',
-      color: '#9932CC',
-      probability: 0.1601,
-      essenceBonus: 20
+      color: '#9932CC'
     },
     spiritual: {
       name: '灵品',
-      color: '#1E90FF',
-      probability: 0.2801,
-      essenceBonus: 10
+      color: '#1E90FF'
     },
     mortal: {
       name: '凡品',
-      color: '#32CD32',
-      probability: 0.4997,
-      essenceBonus: 5
+      color: '#32CD32'
     }
   } satisfies Record<PetRarity, PetRarityConfig>
 
@@ -682,12 +506,6 @@
     if (item.type === 'pet') return isPetRarity(item.rarity) ? petRarities[item.rarity].color : '#9e9e9e'
     if (item.type === 'pill') return '#9e9e9e'
     return isEquipmentQuality(item.quality) ? equipmentQualities[item.quality].color : '#9e9e9e'
-  }
-
-  const getItemQualityName = (item: GameItem): string => {
-    if (item.type === 'pet') return isPetRarity(item.rarity) ? petRarities[item.rarity].name : '未知'
-    if (item.type === 'pill') return '丹药'
-    return isEquipmentQuality(item.quality) ? equipmentQualities[item.quality].name : '未知'
   }
 
   // 灵宠池配置
@@ -799,76 +617,16 @@
     return attributes
   }
 
-  // 根据境界调整装备品质概率
-  const getEquipProbabilities: Record<EquipmentQuality, number> = {
-    common: 0.5, // 凡品 50%
-    uncommon: 0.3, // 下品 30%
-    rare: 0.12, // 中品 12%
-    epic: 0.05, // 上品 5%
-    legendary: 0.02, // 极品 2%
-    mythic: 0.01 // 仙品 1%
-  }
-
-  // 根据心愿单调整装备概率
-  const getAdjustedEquipProbabilities = (): Record<EquipmentQuality, number> => {
-    const baseProbs = { ...getEquipProbabilities }
-    const selectedQuality = playerStore.selectedWishEquipQuality
-    if (playerStore.wishlistEnabled && selectedQuality && isEquipmentQuality(selectedQuality)) {
-      const quality = selectedQuality
-      const bonus = wishlistBonus.equipment(quality)
-      // 增加选中品质的概率
-      baseProbs[quality] *= 1 + bonus
-      // 按比例降低其他品质的概率
-      const totalOtherProb = equipmentQualityKeys.filter(q => q !== quality).reduce((sum, q) => sum + baseProbs[q], 0)
-      const reductionFactor = (1 - baseProbs[quality]) / totalOtherProb
-      for (const otherQuality of equipmentQualityKeys) {
-        if (otherQuality !== quality) baseProbs[otherQuality] *= reductionFactor
-      }
+  const poolOdds = computed(() => {
+    const equipmentWish = playerStore.wishlistEnabled ? playerStore.selectedWishEquipQuality : null
+    const petWish = playerStore.wishlistEnabled ? playerStore.selectedWishPetRarity : null
+    return {
+      all: getGachaOdds('all', equipmentWish, petWish),
+      equipment: getGachaOdds('equipment', equipmentWish, petWish),
+      pet: getGachaOdds('pet', equipmentWish, petWish)
     }
-    return baseProbs
-  }
-
-  // 根据心愿单调整灵宠概率
-  const getAdjustedPetProbabilities = (): Record<PetRarity, number> => {
-    const baseProbs: Record<PetRarity, number> = {
-      divine: petRarities.divine.probability,
-      celestial: petRarities.celestial.probability,
-      mystic: petRarities.mystic.probability,
-      spiritual: petRarities.spiritual.probability,
-      mortal: petRarities.mortal.probability
-    }
-    const selectedRarity = playerStore.selectedWishPetRarity
-    if (playerStore.wishlistEnabled && selectedRarity && isPetRarity(selectedRarity)) {
-      const rarity = selectedRarity
-      const bonus = wishlistBonus.pet(rarity)
-      // 增加选中品质的概率
-      baseProbs[rarity] *= 1 + bonus
-      // 按比例降低其他品质的概率
-      const totalOtherProb = petRarityKeys.filter(r => r !== rarity).reduce((sum, r) => sum + baseProbs[r], 0)
-      const reductionFactor = (1 - baseProbs[rarity]) / totalOtherProb
-      for (const otherRarity of petRarityKeys) {
-        if (otherRarity !== rarity) baseProbs[otherRarity] *= reductionFactor
-      }
-    }
-    return baseProbs
-  }
-
-  // 修改抽取单个装备的函数
-  const drawSingleEquip = () => {
-    const random = Math.random()
-    let accumulatedProb = 0
-    const currentProbs = getAdjustedEquipProbabilities()
-    for (const quality of equipmentQualityKeys) {
-      const probability = currentProbs[quality]
-      accumulatedProb += probability
-      if (random <= accumulatedProb) {
-        const types = Object.keys(equipmentTypes) as EquipmentSlot[]
-        const type = types[Math.floor(Math.random() * types.length)]
-        return generateEquipment(playerStore.level || 1, type, quality)
-      }
-    }
-    return generateEquipment(playerStore.level || 1, null, 'common')
-  }
+  })
+  const drawPrice = computed(() => poolOdds.value[gachaType.value].price)
 
   const createPet = (rarity: PetRarity, template: PetTemplate): Pet => {
     const upgradeItemCount: Record<PetRarity, number> = {
@@ -880,7 +638,7 @@
     }
     return {
       ...template,
-      id: Date.now() + Math.random(),
+      id: crypto.getRandomValues(new Uint32Array(4)).join('-'),
       rarity,
       type: 'pet',
       quality: {
@@ -899,185 +657,93 @@
     }
   }
 
-  const drawSinglePet = (): Pet => {
-    const random = Math.random()
-    let accumulatedProb = 0
-    const currentProbs = getAdjustedPetProbabilities()
-    for (const rarity of petRarityKeys) {
-      accumulatedProb += currentProbs[rarity]
-      if (random <= accumulatedProb) {
-        const pool = petPool[rarity]
-        return createPet(rarity, pool[Math.floor(Math.random() * pool.length)]!)
-      }
-    }
-    const pool = petPool.mortal
-    return createPet('mortal', pool[Math.floor(Math.random() * pool.length)]!)
-  }
-
-  // 综合池概率配置
-  const getAllPoolProbabilities = (_level: number): { equipment: Record<EquipmentQuality, number>; pet: Record<PetRarity, number> } => {
-    const adjustedEquipProbs: Record<EquipmentQuality, number> = {
-      common: getEquipProbabilities.common * 0.5,
-      uncommon: getEquipProbabilities.uncommon * 0.5,
-      rare: getEquipProbabilities.rare * 0.5,
-      epic: getEquipProbabilities.epic * 0.5,
-      legendary: getEquipProbabilities.legendary * 0.5,
-      mythic: getEquipProbabilities.mythic * 0.5
-    }
-    const adjustedPetProbs: Record<PetRarity, number> = {
-      divine: petRarities.divine.probability * 0.5,
-      celestial: petRarities.celestial.probability * 0.5,
-      mystic: petRarities.mystic.probability * 0.5,
-      spiritual: petRarities.spiritual.probability * 0.5,
-      mortal: petRarities.mortal.probability * 0.5
-    }
-    return {
-      equipment: adjustedEquipProbs,
-      pet: adjustedPetProbs
-    }
-  }
-
-  // 从综合池抽取
-  const drawFromAllPool = () => {
-    const random = Math.random()
-    const probs = getAllPoolProbabilities(playerStore.level || 1)
-    // 先决定是抽装备还是灵宠
-    if (random < 0.5) {
-      // 抽装备
-      let accumulatedProb = 0
-      for (const quality of equipmentQualityKeys) {
-        const probability = probs.equipment[quality]
-        accumulatedProb += probability
-        if (random * 2 <= accumulatedProb) {
-          const type = equipmentTypes2[Math.floor(Math.random() * equipmentTypes2.length)]!
-          return {
-            ...generateEquipment(playerStore.level || 1, type, quality),
-            type,
-            equipType: type
-          }
-        }
-      }
-      // 如果没有命中任何概率，返回最低品质的装备
-      const type = equipmentTypes2[Math.floor(Math.random() * equipmentTypes2.length)]!
-      return {
-        ...generateEquipment(playerStore.level || 1, type, 'common'),
-        type,
-        equipType: type
-      }
-    } else {
-      // 抽灵宠
-      let accumulatedProb = 0
-      for (const rarity of petRarityKeys) {
-        accumulatedProb += petRarities[rarity].probability
-        if ((random - 0.5) * 2 <= accumulatedProb) {
-          const pool = petPool[rarity]
-          return createPet(rarity, pool[Math.floor(Math.random() * pool.length)]!)
-        }
-      }
-      const pool = petPool.mortal
-      return createPet('mortal', pool[Math.floor(Math.random() * pool.length)]!)
-    }
-  }
-
   const gachaNumber = ref(1)
 
   // 执行抽卡
   const performGacha = async (times: number) => {
     gachaNumber.value = times
     showResult.value = false
-    const cost = playerStore.wishlistEnabled ? times * 200 : times * 100
+    const cost = times * drawPrice.value
     if (playerStore.spiritStones < cost) {
       message.error('灵石不足！')
       return
     }
     if (gachaType.value != 'equipment' && playerStore.items.filter(item => item.type === 'pet').length >= 100) {
-      message.error('灵宠背包已满，请先处理一些灵宠')
+      message.error('灵宠已满，可前往灵宠页整理')
       return
     }
     if (isDrawing.value) return
     isDrawing.value = true
     // 扣除灵石
     playerStore.spiritStones -= cost
+    notify('抽奖', '灵石 −' + cost)
+    // 生成抽卡结果
+    const odds = poolOdds.value[gachaType.value]
+    const results = Array.from({ length: times }, () => {
+      const draw = rollGacha(odds)
+      if (draw.type === 'equipment') return generateEquipment(playerStore.level, draw.quality)
+      const pool = petPool[draw.rarity]
+      return createPet(draw.rarity, pool[Math.floor(Math.random() * pool.length)]!)
+    })
+    autoSoldIds.value.clear()
+    // 添加到背包
+    results.forEach(item => {
+      if (item.type === 'pet') {
+        playerStore.receiveDrawnPet(item)
+        notify('获得灵宠', item.name)
+        notify(item.name, '灵宠精华 +' + playerStore.petEssenceYield(item).draw)
+        return
+      } else if (equipmentSlots.includes(item.type)) {
+        // 检查是否需要自动出售
+        if (
+          playerStore.autoSellQualities.length > 0 &&
+          (playerStore.autoSellQualities.includes('all') || playerStore.autoSellQualities.includes(item.quality))
+        ) {
+          const basePrice = stonePrices.get(item.quality) ?? 1
+          playerStore.reinforceStones += basePrice
+          autoSoldIds.value.add(item.id)
+          notify('自动出售', item.name)
+          notify(item.name, '强化石 +' + basePrice)
+          return // 不添加到背包
+        }
+      }
+      item.unread = true
+      playerStore.items.push(item)
+    })
+    autoReleasedIds.value = new Set()
+    const autoRarities = playerStore.autoReleaseRarities
+    if (autoRarities.length) {
+      const surplus = playerStore.classifyPets().surplus
+      const autoPets = results.filter(isPet).filter(pet => surplus.has(pet.id) &&
+        (autoRarities.includes('all') || autoRarities.includes(pet.rarity)))
+      if (autoPets.length) {
+        const quote = playerStore.quotePetRelease(autoPets)
+        const released = playerStore.releasePets(quote)
+        if (released.success) {
+          autoReleasedIds.value = new Set(quote.ids)
+          for (const pet of autoPets) {
+            notify('自动放生', pet.name)
+            notify(pet.name, '灵宠精华 +' + playerStore.petEssenceYield(pet).release)
+          }
+        }
+      }
+    }
+    // 保存数据
+    playerStore.saveData()
     // 开始抽卡动画
     isShaking.value = true
     await new Promise(resolve => setTimeout(resolve, 1000))
     isShaking.value = false
     isOpening.value = true
     await new Promise(resolve => setTimeout(resolve, 1000))
-    // 生成抽卡结果
-    const results = Array(times)
-      .fill(undefined)
-      .map(() => {
-        if (gachaType.value === 'all') {
-          return drawFromAllPool()
-        } else {
-          return gachaType.value === 'equipment' ? drawSingleEquip() : drawSinglePet()
-        }
-      })
-    // 添加到背包
-    results.forEach(item => {
-      if (item.type === 'pet') {
-        // 根据品质获得精华
-        const rarityConfig = playerStore.petConfig.rarityMap[item.rarity]
-        if (rarityConfig) {
-          playerStore.petEssence += rarityConfig.essenceBonus
-        }
-        // 检查是否需要自动放生
-        if (
-          playerStore.autoReleaseRarities.length > 0 &&
-          (playerStore.autoReleaseRarities.includes('all') || playerStore.autoReleaseRarities.includes(item.rarity))
-        ) {
-          autoReleasedCount.value++
-          return // 不添加到背包
-        }
-      } else if (equipmentTypes2.includes(item.type)) {
-        // 检查是否需要自动出售
-        if (
-          playerStore.autoSellQualities.length > 0 &&
-          (playerStore.autoSellQualities.includes('all') || playerStore.autoSellQualities.includes(item.quality))
-        ) {
-          // 计算出售价格
-          const qualityPrices: Record<EquipmentQuality, number> = {
-            mythic: 6,
-            legendary: 5,
-            epic: 4,
-            rare: 3,
-            uncommon: 2,
-            common: 1
-          }
-          const basePrice = isEquipmentQuality(item.quality) ? qualityPrices[item.quality] : 1
-          playerStore.reinforceStones += basePrice
-          autoSoldCount.value++
-          autoSoldIncome.value += basePrice
-          return // 不添加到背包
-        }
-      }
-      playerStore.items.push({
-        ...item,
-        id: Date.now() + Math.random()
-      })
-    })
-    // 显示自动处理结果通知
-    if (autoSoldCount.value) {
-      message.success(`自动出售了 ${autoSoldCount.value} 件装备，获得 ${autoSoldIncome.value} 强化石`)
-    }
-    if (autoReleasedCount.value) {
-      message.success(`自动放生了 ${autoReleasedCount.value} 只灵宠`)
-    }
-    // 保存数据
-    playerStore.saveData()
     // 显示结果
     gachaResult.value = results
     currentPage.value = 1
     selectedRarity.value = null
     selectedQuality.value = null
     isOpening.value = false
-    showResult.value = true
     isDrawing.value = false
     // 清空自动处理计数器
-    autoSoldCount.value = 0
-    autoReleasedCount.value = 0
-    autoSoldIncome.value = 0
   }
 
   // 筛选结果
@@ -1085,10 +751,10 @@
     if (!gachaResult.value) return []
     return gachaResult.value.filter(item => {
       if (item.type === 'pet') {
-        return !selectedRarity.value || item.rarity === selectedRarity.value
+        return !selectedRarity.value || selectedRarity.value === 'all' || item.rarity === selectedRarity.value
       }
       // 装备筛选
-      return !selectedQuality.value || (item.type !== 'pill' && item.quality === selectedQuality.value)
+      return !selectedQuality.value || selectedQuality.value === 'all' || (item.type !== 'pill' && item.quality === selectedQuality.value)
     })
   })
 
@@ -1131,27 +797,6 @@
     }))
   })
 
-  const handleAutoSellChange = (rawValues: Array<string | number>) => {
-    const values = rawValues.filter((value): value is string => typeof value === 'string')
-    if (values.includes('all')) {
-      // 如果选中了"全部品阶"，则清空其他选项
-      playerStore.autoSellQualities = ['all']
-    } else if (values.length > 0) {
-      // 如果选中了其他选项，确保移除"全部品阶"
-      playerStore.autoSellQualities = values.filter(v => v !== 'all')
-    }
-  }
-
-  const handleAutoReleaseChange = (rawValues: Array<string | number>) => {
-    const values = rawValues.filter((value): value is string => typeof value === 'string')
-    if (values.includes('all')) {
-      // 如果选中了"全部品质"，则清空其他选项
-      playerStore.autoReleaseRarities = ['all']
-    } else if (values.length > 0) {
-      // 如果选中了其他选项，确保移除"全部品质"
-      playerStore.autoReleaseRarities = values.filter(v => v !== 'all')
-    }
-  }
 </script>
 
 <style scoped>

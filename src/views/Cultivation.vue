@@ -1,108 +1,90 @@
 <template>
-  <n-card title="修炼">
+  <section class="character-training" aria-label="修炼">
     <n-space vertical>
       <n-alert type="info" show-icon>
+        <span class="meditation-art" aria-hidden="true" :class="{ breathing: input.manualPress || (playerStore.autoCultivationEnabled && !atMaxRealm && playerStore.spirit >= cultivationCost) }"></span>
         <template #icon>
           <n-icon>
             <book-outline />
           </n-icon>
         </template>
-        通过打坐修炼来提升修为，积累足够的修为后可以尝试突破境界。
+        <template v-if="atMaxRealm">已至大罗九重，可前往秘境挑战更高层数。</template>
+        <template v-else-if="canAffordBreakthrough">灵力充足，可以一键突破至{{ nextRealmName }}。</template>
+        <template v-else>前往{{ nextRealmName }}还差 {{ Math.ceil(breakthroughCost - playerStore.spirit).toLocaleString() }} 灵力。{{ waitEstimate }}</template>
+        <div v-if="!atMaxRealm" class="realm-preview">突破额外加成 · 攻击 +{{ nextGrowth.attack }}　防御 +{{ nextGrowth.defense }}　气血 +{{ nextGrowth.health }}</div>
       </n-alert>
-      <n-space vertical>
-        <n-button type="primary" size="large" block @click="cultivate" :disabled="playerStore.spirit < cultivationCost">
-          打坐修炼 (消耗 <NumericValue :value="cultivationCost" /> 灵力)
+      <div class="training-actions">
+        <MeditationButton :cost="cultivationCost" :disabled="manualDisabled" @meditate="cultivate" />
+        <n-button :type="playerStore.autoCultivationEnabled ? 'warning' : 'success'" size="large" block @click="playerStore.autoCultivationEnabled = !playerStore.autoCultivationEnabled">
+          {{ playerStore.autoCultivationEnabled ? '停止自动修炼' : '开始自动修炼' }}
         </n-button>
-        <n-button :type="isAutoCultivating ? 'warning' : 'success'" size="large" block @click="toggleAutoCultivation">
-          {{ isAutoCultivating ? '停止自动修炼' : '开始自动修炼' }}
-        </n-button>
-        <n-button
-          type="info"
-          size="large"
-          block
-          @click="cultivateUntilBreakthrough"
-          :disabled="playerStore.spirit < calculateBreakthroughCost()"
-        >
-          一键突破
-        </n-button>
-      </n-space>
-      <n-divider>修炼详情</n-divider>
-      <n-descriptions bordered>
-        <n-descriptions-item label="灵力获取速率"><NumericValue :value="baseGainRate * playerStore.spiritRate" /> / 秒</n-descriptions-item>
-        <n-descriptions-item label="修炼效率"><NumericValue :value="cultivationGain" /> 修为 / 次</n-descriptions-item>
-        <n-descriptions-item label="突破所需修为">
-          <NumericValue :value="playerStore.maxCultivation" />
-        </n-descriptions-item>
-      </n-descriptions>
-      <log-panel ref="logRef" title="修炼日志" />
+        <n-button type="info" size="large" block @click="cultivateUntilBreakthrough"
+          :disabled="atMaxRealm || !canAffordBreakthrough || isCalculating || input.manualPress">一键突破</n-button>
+      </div>
+        <span v-if="nextSitHint">{{ nextSitHint }}</span>
+        <ExplorationStatus />
+        <span v-if="playerStore.autoCultivationEnabled && atMaxRealm">已到最高境界，自动修炼已暂停。</span>
+        <span v-else-if="playerStore.autoCultivationEnabled && input.manualPress">手动打坐中，松开后恢复自动修炼。</span>
+        <span v-else-if="playerStore.autoCultivationEnabled">
+          {{ playerStore.spirit < cultivationCost
+            ? `等待灵力 · ${Math.floor(playerStore.spirit)} / ${cultivationCost}`
+            : '自动修炼中' }}
+        </span>
     </n-space>
-  </n-card>
+  </section>
 </template>
 
 <script setup lang="ts">
-  import NumericValue from '../components/NumericValue.vue'
+  import MeditationButton from '../components/MeditationButton.vue'
+  import ExplorationStatus from '../components/ExplorationStatus.vue'
 
-  import { usePlayerStore } from '../stores/player'
+  import { useCultivationInput, usePlayerStore } from '../stores/player'
   import { ref, computed, onUnmounted } from 'vue'
-  import type { MessageType } from '../types/game'
-  import { getCultivationCost, getCultivationGain } from '../utils/cultivation'
-  import { NIcon } from 'naive-ui'
+  import { realmGrowth, getRealmLength, getRealmName } from '../plugins/realm'
+  import { NIcon, useMessage } from 'naive-ui'
+  import { useGameNotices } from '../plugins/game-notices'
   import { BookOutline } from '@vicons/ionicons5'
-  import LogPanel from '../components/LogPanel.vue'
 
   const playerStore = usePlayerStore()
-  const logRef = ref<InstanceType<typeof LogPanel> | null>(null)
+  const input = useCultivationInput()
+  const message = useMessage()
+  const notify = useGameNotices()
 
   // 修炼相关数值
-  const baseGainRate = 1 // 基础灵力获取率
-  const autoGainInterval = 1000 // 自动获取灵力的间隔（毫秒）
   const extraCultivationChance = 0.3 // 获得额外修为的基础概率
 
-  // 计算当前境界的修炼消耗
-  const getCurrentCultivationCost = () => getCultivationCost(playerStore.level)
+  const cultivationCost = computed(() => playerStore.cultivationPlan.cost)
+  const cultivationGain = computed(() => playerStore.cultivationPlan.gain)
+  const breakthroughCost = computed(() => playerStore.cultivationPlan.totalCost)
 
-  // 计算当前境界的修炼获得
-  const getCurrentCultivationGain = () => getCultivationGain(playerStore.level, playerStore.effectiveCultivationRate)
-
-  // 计算当前修炼消耗（作为计算属性）
-  const cultivationCost = computed(() => {
-    return getCurrentCultivationCost()
+  const atMaxRealm = computed(() => playerStore.level >= getRealmLength())
+  const nextRealmName = computed(() => getRealmName(Math.min(getRealmLength(), playerStore.level + 1)).name)
+  const nextGrowth = computed(() => {
+    const now = realmGrowth(playerStore.level, 1)
+    const next = realmGrowth(playerStore.level + 1)
+    return { attack: next.attack - now.attack, defense: next.defense - now.defense, health: next.health - now.health }
+  })
+  const canAffordBreakthrough = computed(() => playerStore.spirit >= breakthroughCost.value)
+  const waitEstimate = computed(() => {
+    if (breakthroughCost.value > playerStore.effectiveSpiritCap) return '当前灵力容量不足，请先打坐积累修为。'
+    if (playerStore.effectiveSpiritRate <= 0) return '请先提升回灵速率。'
+    const seconds = Math.ceil((breakthroughCost.value - playerStore.spirit) / playerStore.effectiveSpiritRate)
+    const time = seconds < 60 ? seconds + ' 秒'
+      : seconds < 3600 ? Math.ceil(seconds / 60) + ' 分钟'
+      : seconds < 86400 ? Math.ceil(seconds / 3600) + ' 小时' : Math.ceil(seconds / 86400) + ' 天'
+    return '按当前回灵速率，专心攒灵约需 ' + time + '。'
   })
 
-  // 计算当前修炼获得（作为计算属性）
-  const cultivationGain = computed(() => {
-    return getCurrentCultivationGain()
-  })
-
-  // 计算突破所需的总灵力
-  const calculateBreakthroughCost = () => {
-    const remainingCultivation = Math.max(0, playerStore.maxCultivation - playerStore.cultivation)
-    const gain = cultivationGain?.value || 1
-    if (gain <= 0) return 0
-    const cultivationTimes = Math.ceil(remainingCultivation / gain)
-    return Math.max(0, cultivationTimes * getCurrentCultivationCost())
-  }
-
-  // 自动修炼状态
-  const isAutoCultivating = ref(false)
-  let cultivationTimer: ReturnType<typeof setInterval> | undefined
   const isCalculating = ref(false)
+  const manualDisabled = computed(() => atMaxRealm.value || isCalculating.value || playerStore.spirit < cultivationCost.value)
 
-  // 显示消息并处理重复
-  const showMessage = (type: MessageType, content: string) => {
-    return logRef.value?.addLog(type, content)
-  }
-
-  // 计算实际获得的修为
-  const calculateCultivationGain = () => {
-    let gain = cultivationGain.value
-    // 根据幸运值计算是否获得额外修为
-    if (Math.random() < extraCultivationChance * playerStore.luck) {
-      gain *= 2
-      showMessage('success', '福缘不错，获得双倍修为！')
-    }
-    return gain
-  }
+  const nextSitHint = computed(() => {
+    const missing = Math.ceil(cultivationCost.value - playerStore.spirit)
+    if (missing <= 0 || atMaxRealm.value) return ''
+    const seconds = Math.ceil(missing / playerStore.effectiveSpiritRate)
+    return '下次打坐还差 ' + missing + ' 灵力' +
+      (Number.isFinite(seconds) && playerStore.effectiveSpiritCap >= cultivationCost.value ? '，按当前回灵速度约需 ' + seconds + ' 秒。' : '。')
+  })
 
   // 检查是否可以突破
   const canBreakthrough = () => {
@@ -110,32 +92,27 @@
   }
 
   // 修炼Worker
+  let requestedLevel = 0
   const cultivationWorker = new Worker(new URL('../workers/cultivation.ts', import.meta.url), { type: 'module' })
 
   // 处理Worker消息
   cultivationWorker.onmessage = ({ data }) => {
     isCalculating.value = false
     if (data.type === 'error') {
-      showMessage('error', data.message)
+      message.error(data.message)
       return
     }
     if (data.type === 'success') {
-      const { spiritCost, cultivationGain, doubleGainTimes } = data.result
+      const { spiritCost, cultivationGain } = data.result
+      // The automatic tick may already have completed this realm while the worker was running.
+      if (playerStore.level !== requestedLevel || playerStore.spirit < spiritCost || breakthroughCost.value !== spiritCost) {
+        message.info('修炼进度已更新，本次一键突破未扣除灵力。')
+        return
+      }
       // 扣除灵力
       playerStore.spirit -= spiritCost
       // 增加修为
       playerStore.cultivate(cultivationGain)
-      if (doubleGainTimes > 0) {
-        showMessage('success', `福缘不错，获得${doubleGainTimes}次双倍修为！`)
-      }
-      // 尝试突破
-      if (canBreakthrough() && playerStore.tryBreakthrough()) {
-        showMessage('success', `突破成功！恭喜进入${playerStore.realm}！`)
-      } else if (canBreakthrough()) {
-        showMessage('info', '已达到突破条件，但突破失败，请继续努力！')
-      } else {
-        showMessage('success', '修炼成功！')
-      }
     }
   }
 
@@ -146,6 +123,7 @@
       // 检查是否已经达到突破条件
       if (!canBreakthrough()) {
         isCalculating.value = true
+        requestedLevel = playerStore.level
         // 发送数据到Worker进行计算
         cultivationWorker.postMessage({
           type: 'cultivateUntilBreakthrough',
@@ -160,84 +138,39 @@
         })
       } else {
         // 直接尝试突破
-        if (playerStore.tryBreakthrough()) {
-          showMessage('success', `突破成功！恭喜进入${playerStore.realm}！`)
-        } else {
-          showMessage('info', '已达到突破条件，但突破失败，请继续努力！')
+        if (!playerStore.tryBreakthrough()) {
+          message.info('已达到突破条件，但突破失败，请继续努力！')
         }
       }
     } catch (error) {
       isCalculating.value = false
       console.error('一键修炼出错：', error)
-      showMessage('error', '修炼失败！')
+      message.error('修炼失败！')
     }
   }
 
   // 手动修炼
   const cultivate = () => {
-    try {
-      const currentCost = getCurrentCultivationCost()
-      if (playerStore.spirit >= currentCost) {
-        const oldRealm = playerStore.realm
-        playerStore.spirit -= currentCost
-        playerStore.cultivate(calculateCultivationGain())
-        // 检查是否发生突破
-        if (playerStore.realm !== oldRealm) {
-          showMessage('success', `突破成功！恭喜进入${playerStore.realm}！`)
-        } else {
-          showMessage('success', '修炼成功！')
-        }
-      } else {
-        showMessage('error', '灵力不足！')
-      }
-    } catch (error) {
-      console.error('修炼出错：', error)
-      showMessage('error', '修炼失败！')
-    }
+    if (manualDisabled.value) return
+    const currentCost = cultivationCost.value
+    const doubled = Math.random() < extraCultivationChance * playerStore.luck
+    const gain = cultivationGain.value * (doubled ? 2 : 1)
+    playerStore.spirit -= currentCost
+    playerStore.cultivate(gain)
+    notify(doubled ? '双倍修为' : '打坐', '修为 +' + Number(gain.toFixed(2)))
+    notify('打坐', '灵力 −' + currentCost)
   }
 
-  // 切换自动修炼
-  const toggleAutoCultivation = () => {
-    try {
-      isAutoCultivating.value = !isAutoCultivating.value
-      if (isAutoCultivating.value) {
-        if (cultivationTimer) return
-        cultivationTimer = setInterval(() => {
-          const currentCost = getCurrentCultivationCost()
-          if (playerStore.spirit >= currentCost) {
-            playerStore.spirit -= currentCost
-            playerStore.cultivate(cultivationGain.value)
-          }
-        }, autoGainInterval)
-      } else {
-        if (cultivationTimer) {
-          clearInterval(cultivationTimer)
-          cultivationTimer = undefined
-        }
-      }
-    } catch (error) {
-      console.error('切换自动修炼出错：', error)
-      logRef.value?.addLog('error', '切换失败！')
-      isAutoCultivating.value = false
-    }
-  }
-
-  // 组件卸载时清理定时器
-  onUnmounted(() => {
-    try {
-      cultivationWorker.terminate()
-      if (cultivationTimer) {
-        clearInterval(cultivationTimer)
-        cultivationTimer = undefined
-      }
-      isAutoCultivating.value = false
-    } catch (error) {
-      console.error('清理定时器出错：', error)
-    }
-  })
+  onUnmounted(() => cultivationWorker.terminate())
 </script>
 
 <style scoped>
+  .character-training {padding-top:12px;border-top:1px solid #82988b55;}
+  .training-actions {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,155px),1fr));gap:8px;}
+  .meditation-art { float:right; position:relative; width:clamp(78px,20vw,150px); aspect-ratio:240/112; margin-left:8px; background:url('/meditation.svg') center / contain no-repeat; }
+  .meditation-art.breathing::after { content:''; position:absolute; inset:63% 27% 12%; border:1px solid #508f7d; border-radius:50%; animation:breath 2.2s ease-out infinite; }
+  @keyframes breath { from { transform:scale(.65); opacity:1; } to { transform:scale(1.3); opacity:0; } }
+  @media(prefers-reduced-motion:reduce) { .meditation-art.breathing::after {animation:none;} }
   .n-space {
     width: 100%;
   }

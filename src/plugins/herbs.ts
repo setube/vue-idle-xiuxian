@@ -141,10 +141,13 @@ export const getHerbValue = (herb: Pick<Herb, 'baseValue'>, quality: HerbQuality
 }
 
 // 随机获取灵草
-export const getRandomHerb = (): Herb | null => {
-  const rand = Math.random()
+export const herbName = (id: string) => herbs.find(herb => herb.id === id)?.name ?? id
+
+export const getRandomHerb = (ids?: readonly string[]): Herb | null => {
+  const pool = ids ? herbs.filter(herb => ids.includes(herb.id)) : herbs
+  const rand = Math.random() * pool.reduce((sum, herb) => sum + herb.chance, 0)
   let cumulative = 0
-  for (const herb of herbs) {
+  for (const herb of pool) {
     cumulative += herb.chance
     if (rand <= cumulative) {
       // 随机决定品质

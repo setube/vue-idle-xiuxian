@@ -11,12 +11,21 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    AutoLootSettings: typeof import('./components/AutoLootSettings.vue')['default']
+    ChangeNotice: typeof import('./components/ChangeNotice.vue')['default']
+    DungeonIdlePanel: typeof import('./components/DungeonIdlePanel.vue')['default']
+    EquipmentComparison: typeof import('./components/EquipmentComparison.vue')['default']
+    EquipmentMap: typeof import('./components/EquipmentMap.vue')['default']
+    EquipmentQualityBadge: typeof import('./components/EquipmentQualityBadge.vue')['default']
+    ExplorationStatus: typeof import('./components/ExplorationStatus.vue')['default']
+    GameFeedback: typeof import('./components/GameFeedback.vue')['default']
+    GearGlyph: typeof import('./components/GearGlyph.vue')['default']
+    HoldButton: typeof import('./components/HoldButton.vue')['default']
     LogPanel: typeof import('./components/LogPanel.vue')['default']
+    MeditationButton: typeof import('./components/MeditationButton.vue')['default']
     NAlert: typeof import('naive-ui')['NAlert']
     NButton: typeof import('naive-ui')['NButton']
     NCard: typeof import('naive-ui')['NCard']
-    NCheckbox: typeof import('naive-ui')['NCheckbox']
-    NCheckboxGroup: typeof import('naive-ui')['NCheckboxGroup']
     NCollapse: typeof import('naive-ui')['NCollapse']
     NCollapseItem: typeof import('naive-ui')['NCollapseItem']
     NConfigProvider: typeof import('naive-ui')['NConfigProvider']
@@ -39,9 +48,9 @@ declare module 'vue' {
     NLayoutHeader: typeof import('naive-ui')['NLayoutHeader']
     NList: typeof import('naive-ui')['NList']
     NListItem: typeof import('naive-ui')['NListItem']
-    NMenu: typeof import('naive-ui')['NMenu']
     NMessageProvider: typeof import('naive-ui')['NMessageProvider']
     NModal: typeof import('naive-ui')['NModal']
+    NNotificationProvider: typeof import('naive-ui')['NNotificationProvider']
     NPageHeader: typeof import('naive-ui')['NPageHeader']
     NPagination: typeof import('naive-ui')['NPagination']
     NProgress: typeof import('naive-ui')['NProgress']
@@ -62,5 +71,6 @@ declare module 'vue' {
     NUpload: typeof import('naive-ui')['NUpload']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    StarterTrial: typeof import('./components/StarterTrial.vue')['default']
   }
 }

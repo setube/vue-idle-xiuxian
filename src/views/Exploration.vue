@@ -8,48 +8,42 @@
     <n-layout-content>
       <n-card :bordered="false">
         <n-space vertical>
-          <n-alert type="info" show-icon>
-            <template #icon>
-              <n-icon>
-                <compass-outline />
-              </n-icon>
-            </template>
-            探索各处秘境，寻找机缘造化。小心谨慎，危险与机遇并存。
-          </n-alert>
-          <n-grid :cols="2" :x-gap="12">
+          <ExplorationStatus />
+          <StarterTrial />
+          <n-grid cols="1 640:2" :x-gap="12">
             <n-grid-item v-for="location in availableLocations" :key="location.id">
               <n-card :title="location.name" size="small">
                 <n-space vertical>
-                  <n-text depth="3">{{ location.description }}</n-text>
-                  <n-space justify="space-between">
-                    <n-text>消耗灵力：{{ location.spiritCost }}</n-text>
-                    <n-text>最低境界：{{ getRealmName(location.minLevel).name }}</n-text>
-                  </n-space>
+                  <n-text>{{ explore.isFirstVisit(location) ? '铁匠备好了一把青竹剑，攻击 +12。' : location.description }}</n-text>
+                  <n-text>{{ explore.isFirstVisit(location) ? '首次免费' : '每次消耗 ' + location.spiritCost + ' 灵力' }} · {{ getRealmName(location.minLevel).name }}可进入</n-text>
+                  <n-text depth="3">药材 · {{ location.herbIds.map(herbName).join('、') }}</n-text>
+                  <div v-if="location.id === 'newbie_village'" class="village-progress">
+                    <span>{{ villageVisits < 3 ? '再探索 ' + (3 - villageVisits) + ' 次发现村后药圃' : villageVisits < 6 ? '再探索 ' + (6 - villageVisits) + ' 次，采药量提升至 2 株' : '路线已熟悉 · 每次可采 2 株' }}</span>
+                    <progress :value="Math.min(6, villageVisits)" max="6" aria-label="新手村探索进度" />
+                  </div>
+                  <n-text v-else depth="3">已探索 {{ playerStore.locationVisits[location.id] ?? 0 }} 次</n-text>
                   <n-space>
-                    <n-button
-                      type="primary"
-                      @click="exploreLocation(location)"
-                      :disabled="playerStore.spirit < location.spiritCost || isAutoExploring || isExploring"
-                    >
-                      探索
-                    </n-button>
-                    <n-button
-                      :type="exploringLocations[location.id] ? 'warning' : 'success'"
-                      @click="
-                        exploringLocations[location.id] ? stopAutoExploration(location) : startAutoExploration(location)
-                      "
-                      :disabled="
-                        playerStore.spirit < location.spiritCost ||
-                        (isAutoExploring && !exploringLocations[location.id])
-                      "
-                    >
-                      {{ exploringLocations[location.id] ? '停止' : '自动' }}
-                    </n-button>
+                    <n-button v-if="explore.isFirstVisit(location)" type="primary" :class="{ 'guide-target': !playerStore.isNewPlayer }"
+                      :disabled="!!explore.target" @click="explore.visit(location)">免费探索新手村</n-button>
+                    <HoldButton v-else v-slot="{ count }" type="primary" :interval="200"
+                      :disabled="!!explore.target || playerStore.spirit < explore.cost(location)"
+                      title="按住鼠标或空格连续探索" @activate="explore.visit(location)">
+                      {{ count ? '连续探索 · ' + count + ' 次' : '探索' }}
+                    </HoldButton>
+                    <n-button v-if="!explore.isFirstVisit(location)" :disabled="!!explore.target && explore.target.id !== location.id"
+                      @click="explore.toggle(location)">{{ explore.target?.id === location.id ? '停止' : '自动探索' }}</n-button>
                   </n-space>
+                  <div v-if="location.id === 'newbie_village' && villageVisits >= 3">
+                    <p>村后药圃 · {{ location.spiritCost }} 灵力 / 次</p>
+                    <n-space><n-button v-for="id in gardenHerbs" :key="id" size="small" :disabled="!!explore.target || playerStore.spirit < location.spiritCost" @click="explore.visit(location, id)">采{{ herbName(id) }} ×{{ villageVisits >= 6 ? 2 : 1 }}</n-button></n-space>
+                  </div>
                 </n-space>
               </n-card>
             </n-grid-item>
           </n-grid>
+          <div v-if="lockedLocations.length" class="locked-locations">
+            <span v-for="place in lockedLocations" :key="place.id">{{ place.name }} · {{ getRealmName(place.minLevel).name }}开放</span>
+          </div>
           <n-divider>探索统计</n-divider>
           <n-descriptions :column="2" bordered>
             <n-descriptions-item label="探索次数">
@@ -67,114 +61,40 @@
           </n-descriptions>
         </n-space>
       </n-card>
-      <n-space justify="end" style="margin-bottom: 8px">
-        <n-button size="small" @click="clearLogPanel" type="error" secondary>清空日志</n-button>
-      </n-space>
-      <log-panel ref="logRef" title="探索日志" />
+      <n-card title="探索日志" size="small">
+        <template #header-extra><n-button v-if="explore.logs.length" size="small" @click="explore.logs = []">清空日志</n-button></template>
+        <n-scrollbar style="max-height: 200px">
+          <p v-for="(entry, index) in [...explore.logs].reverse()" :key="index">{{ entry.time }}　{{ entry.content }}</p>
+          <n-empty v-if="!explore.logs.length" description="暂无日志" />
+        </n-scrollbar>
+      </n-card>
     </n-layout-content>
   </n-layout>
 </template>
 
 <script setup lang="ts">
+  import HoldButton from '../components/HoldButton.vue'
   import NumericValue from '../components/NumericValue.vue'
-  import { ref, shallowRef, computed, onMounted, onUnmounted } from 'vue'
+  import { computed } from 'vue'
+  import StarterTrial from '../components/StarterTrial.vue'
   import { usePlayerStore } from '../stores/player'
-  import { CompassOutline } from '@vicons/ionicons5'
-  import { getRealmName } from '../plugins/realm'
+  import { useExplorationStore } from '../stores/exploration'
+  import { herbName } from '../plugins/herbs'
   import { locations } from '../plugins/locations'
-  import { triggerRandomEvent, getRandomReward, handleReward } from '../plugins/events'
-  import LogPanel from '../components/LogPanel.vue'
-  import type { ExplorationLocation, ExplorationResult, WorkerError, MessageType } from '../types/game'
-
-  const logRef = ref<InstanceType<typeof LogPanel> | null>(null)
+  import { getRealmName } from '../plugins/realm'
+  import ExplorationStatus from '../components/ExplorationStatus.vue'
   const playerStore = usePlayerStore()
-  const explorationInterval = 3000
-  const exploringLocations = ref<Record<string, boolean>>({})
-  const isAutoExploring = ref(false)
-  const isExploring = ref(false)
-  const explorationWorker = shallowRef<Worker | null>(null)
-  let explorationTimer: ReturnType<typeof setInterval> | undefined
-  let pendingCost = 0
+  const explore = useExplorationStore()
+  const gardenHerbs = ['spirit_grass', 'cloud_flower'] as const
+  const villageVisits = computed(() => playerStore.locationVisits.newbie_village ?? 0)
+  const lockedLocations = computed(() => locations.filter(loc => playerStore.level < loc.minLevel))
   const availableLocations = computed(() => locations.filter(loc => playerStore.level >= loc.minLevel))
-  const showMessage = (type: MessageType, content: string) => logRef.value?.addLog(type, content)
-
-  const failExploration = (message: string) => {
-    playerStore.spirit += pendingCost
-    pendingCost = 0
-    isExploring.value = false
-    showMessage('error', message)
-  }
-
-  onMounted(() => {
-    const worker = new Worker(new URL('../workers/exploration.ts', import.meta.url), { type: 'module' })
-    explorationWorker.value = worker
-    worker.onmessage = ({ data }: MessageEvent<ExplorationResult | WorkerError>) => {
-      if (data.type === 'error') {
-        failExploration(data.message)
-        return
-      }
-      pendingCost = 0
-      isExploring.value = false
-      playerStore.explorationCount++
-      if (data.eventTriggered) {
-        if (triggerRandomEvent(playerStore, showMessage)) showMessage('info', '你的福缘不错，触发了一个特殊事件！')
-      } else {
-        const location = availableLocations.value.find(loc => loc.id === data.locationId)
-        const reward = location ? getRandomReward(location.rewards) : null
-        if (reward) {
-          // Keep configuration immutable; repeated lucky rewards must not compound the next reward.
-          const grantedReward = { ...reward, amount: Math.floor(reward.amount * data.rewardMultiplier) }
-          if (data.rewardMultiplier > 1) showMessage('success', '福缘加持，获得了更多奖励！')
-          handleReward(grantedReward, playerStore, showMessage)
-        }
-      }
-      void playerStore.saveData()
-    }
-    worker.onerror = () => failExploration('探索计算失败，请重试')
-  })
-
-  const exploreLocation = (location: ExplorationLocation) => {
-    if (isExploring.value || !explorationWorker.value) return
-    if (playerStore.spirit < location.spiritCost) {
-      showMessage('error', '灵力不足！')
-      return
-    }
-    isExploring.value = true
-    pendingCost = location.spiritCost
-    playerStore.spirit -= pendingCost
-    explorationWorker.value.postMessage({
-      type: 'explore', playerData: { luck: playerStore.luck },
-      location: { id: location.id, spiritCost: location.spiritCost }
-    })
-  }
-
-  const stopAutoExploration = (location: ExplorationLocation) => {
-    clearInterval(explorationTimer)
-    explorationTimer = undefined
-    exploringLocations.value[location.id] = false
-    isAutoExploring.value = false
-  }
-  const startAutoExploration = (location: ExplorationLocation) => {
-    if (isAutoExploring.value) return
-    isAutoExploring.value = true
-    exploringLocations.value[location.id] = true
-    explorationTimer = setInterval(() => {
-      if (playerStore.spirit >= location.spiritCost) exploreLocation(location)
-      else {
-        stopAutoExploration(location)
-        showMessage('warning', '灵力不足，自动探索已停止！')
-      }
-    }, explorationInterval)
-  }
-  onUnmounted(() => {
-    explorationWorker.value?.terminate()
-    clearInterval(explorationTimer)
-    playerStore.spirit += pendingCost
-  })
-  const clearLogPanel = () => logRef.value?.clearLogs()
 </script>
 
 <style scoped>
+  .village-progress { display:grid; gap:4px; }
+  .village-progress progress { width:100%; height:7px; accent-color:#527f69; }
+  .locked-locations { display:flex; flex-wrap:wrap; gap:6px 18px; font-size:13px; }
   .n-space {
     width: 100%;
   }

@@ -7,6 +7,9 @@
     </n-layout-header>
     <n-layout-content>
       <n-card :bordered="false">
+        <n-card v-if="recent.length" title="最近达成" size="small">
+          <p v-for="a in recent" :key="a.id"><strong>{{ a.name }}</strong> · 已到账 · {{ rewardSummary(a) }}</p>
+        </n-card>
         <n-tabs type="line">
           <n-tab-pane
             v-for="category in achievementCategories"
@@ -55,21 +58,11 @@
   import { usePlayerStore } from '../stores/player'
   import { achievements, getAchievementProgress } from '../plugins/achievements'
   import type { Achievement } from '../plugins/achievements'
-  import { ref, onMounted } from 'vue'
   import { useMessage } from 'naive-ui'
-  import { checkAchievements } from '../plugins/achievements'
 
+  import { computed } from 'vue'
   const playerStore = usePlayerStore()
   const message = useMessage()
-
-  // 检查成就完成情况
-  onMounted(() => {
-    const newlyCompletedAchievements = checkAchievements(playerStore)
-    // 显示新完成的成就
-    newlyCompletedAchievements.forEach(achievement => {
-      message.success(`恭喜解锁新成就：${achievement.name}！\n\n${achievement.description}`, { duration: 3000 })
-    })
-  })
 
   // 获取所有成就类别
   const achievementCategories = Object.entries(achievements).map(([key, value]) => ({
@@ -79,7 +72,7 @@
   }))
 
   // 获取成就类别名称
-  const getCategoryName = (category: string): string => {
+  function getCategoryName(category: string): string {
     const categoryNames: Record<string, string> = {
       equipment: '装备成就',
       dungeon_explore: '秘境探索',
@@ -94,13 +87,17 @@
     return categoryNames[category] || '其他成就'
   }
 
+  const byId = new Map(Object.values(achievements).flat().map(a => [a.id, a]))
+  const recent = computed(() => playerStore.completedAchievements.slice(-3).reverse()
+    .map(id => byId.get(id)).filter((a): a is Achievement => !!a))
+
   // 检查成就是否完成
   const isAchievementCompleted = (achievementId: string): boolean => {
     return playerStore.completedAchievements.includes(achievementId)
   }
 
   // 显示成就详情
-  const showAchievementDetails = (achievement: Achievement): void => {
+  const rewardSummary = (achievement: Achievement): string => {
     let rewardText = '奖励：'
     if (achievement.reward) {
       if (achievement.reward.spirit) rewardText += `\n${achievement.reward.spirit} 灵力`
@@ -112,6 +109,10 @@
         rewardText += `\n${(achievement.reward.alchemyRate * 100 - 100).toFixed(0)}% 炼丹成功率提升`
       if (achievement.reward.luck) rewardText += `\n${(achievement.reward.luck * 100 - 100).toFixed(0)}% 幸运提升`
     }
+    return rewardText.trim()
+  }
+  const showAchievementDetails = (achievement: Achievement): void => {
+    const rewardText = rewardSummary(achievement)
     message.info(`${achievement.name}\n\n${achievement.description}\n\n${rewardText}`, { duration: 5000 })
   }
 
